@@ -1,26 +1,37 @@
 .PHONY: venv install build test test-all lint format clean
 
-venv:
+# Dependency tracking files
+.venv/bin/python:
 	uv venv
 
-install:
+.venv/.deps-installed: pyproject.toml .venv/bin/python
+	uv sync
 	uv pip install -e ".[dev]"
+	touch .venv/.deps-installed
 
-build:
-	uv run build
+# Virtual environment target
+venv: .venv/bin/python
 
-test:
+# Install dependencies
+install: .venv/.deps-installed
+
+# Run tests
+test: .venv/.deps-installed
 	uv run pytest
 
-test-all:
+# Run tests with verbose output
+test-all: .venv/.deps-installed
 	uv run pytest -v
 
-lint:
+# Run linting
+lint: .venv/.deps-installed
 	uv run ruff check .
 
-format:
+# Format code
+format: .venv/.deps-installed
 	uv run ruff format .
 
+# Clean build artifacts and caches
 clean:
 	rm -rf dist build *.egg-info
 	find . -type d -name __pycache__ -exec rm -rf {} +

@@ -20,7 +20,7 @@ def test_bot_config_defaults():
     """Test BotConfig default values."""
     config = BotConfig()
     assert config.model_provider == "openai"
-    assert config.model_name == "gpt-4"
+    assert config.model_name == "gpt-4o"
     assert config.temperature == 0.7
     assert config.tags == []
     assert config.api_key == "ENV:OPENAI_API_KEY"

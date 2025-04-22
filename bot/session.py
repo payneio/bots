@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from bot.config import BotConfig
-from bot.llm.integration import BotLLM
+from bot.llm.pydantic_bot import BotLLM
 from bot.llm.schemas import CommandAction, CommandRequest, CommandResponse
 from bot.models import (
     Conversation,
@@ -27,16 +27,18 @@ from bot.models import (
 class Session:
     """Interactive session with a bot."""
 
-    def __init__(self, config: BotConfig, session_path: Path):
+    def __init__(self, config: BotConfig, session_path: Path, debug: bool = False):
         """Initialize a session.
 
         Args:
             config: The bot configuration
             session_path: The path to the session directory
+            debug: Whether to print debug information (default: False)
         """
         self.config = config
         self.session_path = session_path
-        self.llm = BotLLM(config)
+        self.debug = debug
+        self.llm = BotLLM(config, debug=debug)
         self.console = Console()
 
         # Initialize session data
@@ -246,19 +248,8 @@ class Session:
 
         # Add system message if not present
         if not any(m.role == MessageRole.SYSTEM for m in self.conversation.messages):
-            # Read system prompt from file
-            system_prompt_path = (
-                Path(self.config.system_prompt_path)
-                if hasattr(self.config, "system_prompt_path")
-                else None
-            )
-
-            if system_prompt_path and system_prompt_path.exists():
-                with open(system_prompt_path, "r") as f:
-                    system_prompt = f.read()
-            else:
-                system_prompt = "You are a helpful AI assistant."
-
+            # Get system prompt
+            system_prompt = self.llm.system_prompt
             self.add_message(MessageRole.SYSTEM, system_prompt)
 
         try:
@@ -266,8 +257,8 @@ class Session:
 
             while True:
                 try:
-                    # Get user input
-                    user_input = input("\nYou: ").strip()
+                    # Get user input - use a simple prompt
+                    user_input = input("\nYou: ")
 
                     # Check if it's a slash command
                     if user_input.startswith("/"):
@@ -276,7 +267,7 @@ class Session:
                         continue
 
                     # Skip empty messages
-                    if not user_input:
+                    if not user_input.strip():
                         continue
 
                     # Add user message to conversation
@@ -316,6 +307,10 @@ class Session:
                     self.console.print("\nExiting session.")
                     break
 
+                except EOFError:
+                    self.console.print("\nEOF detected. Exiting session.")
+                    break
+
                 except Exception as e:
                     self._log_event("error", {"error": str(e)})
                     self.console.print(f"\n[red]Error: {e}[/red]")
@@ -344,18 +339,7 @@ class Session:
 
         try:
             # Add system message
-            system_prompt_path = (
-                Path(self.config.system_prompt_path)
-                if hasattr(self.config, "system_prompt_path")
-                else None
-            )
-
-            if system_prompt_path and system_prompt_path.exists():
-                with open(system_prompt_path, "r") as f:
-                    system_prompt = f.read()
-            else:
-                system_prompt = "You are a helpful AI assistant."
-
+            system_prompt = self.llm.system_prompt
             self.add_message(MessageRole.SYSTEM, system_prompt)
 
             # Add user message

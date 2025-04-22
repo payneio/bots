@@ -3,6 +3,7 @@
 import sys
 
 import click
+import pydantic_ai
 from rich.console import Console
 
 from bot.async_core import run_session
@@ -24,22 +25,42 @@ def main(ctx):
     ctx.obj = {}
 
 
-@main.command(name='run', help='Start a bot session')
-@click.argument("bot_name")
-def run_bot(bot_name):
-    """Start a session with a bot."""
-    # Check if input is from a pipe
-    if not sys.stdin.isatty():
+@main.command(name="run", help="Start a bot session")
+@click.option("--name", "-n", required=True, help="Name of the bot to start a session with")
+@click.option("--one-shot", is_flag=True, help="Run in one-shot mode")
+@click.option("--debug", is_flag=True, help="Show debug information")
+def run_bot(name, one_shot, debug):
+    """Start a session with a bot.
+    
+    Starts an interactive session with the specified bot. If --one-shot is specified,
+    reads from stdin for the prompt.
+    """
+    if debug:
+        console.print("[bold blue]Debug Information:[/bold blue]")
+        console.print(f"Python version: {sys.version}")
+        console.print(f"Python executable: {sys.executable}")
+        console.print(f"pydantic-ai version: {getattr(pydantic_ai, '__version__', 'unknown')}")
+        
+        # Check for API key
+        import os
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            console.print(f"OPENAI_API_KEY: [green]Present[/green] ({len(api_key)} chars)")
+        else:
+            console.print("OPENAI_API_KEY: [red]Not found in environment[/red]")
+        console.print("")
+    
+    if one_shot:
         # One-shot mode
         prompt = sys.stdin.read().strip()
         if prompt:
-            run_session(bot_name, one_shot=True, prompt=prompt)
+            run_session(name, one_shot=True, prompt=prompt, debug=debug)
         else:
             console.print("[red]Error: No input provided for one-shot mode[/red]")
             sys.exit(1)
     else:
         # Interactive mode
-        run_session(bot_name)
+        run_session(name, debug=debug)
 
 
 @main.command()
@@ -69,7 +90,7 @@ def list():
     try:
         bots = list_bots()
         if not bots["global"] and not bots["local"]:
-            console.print("No bots found. Create one with 'bot init <name>'")
+            console.print("No bots found. Create one with 'bot init <n>'")
             return
 
         console.print("\n[bold]Available Bots:[/bold]")

@@ -8,7 +8,8 @@
 
 ```bash
 bot init <name> [--local]         # Create a new bot
-bot <name>                        # Start session (interactive or one-shot)
+bot run --name/-n <name>          # Start interactive session
+bot run --name/-n <name> --one-shot  # Run in one-shot mode (reads from stdin)
 bot list                          # List all available bots (local & global)
 bot mv <old-name> <new-name>      # Rename a bot
 ```

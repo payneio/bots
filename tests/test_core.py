@@ -52,7 +52,7 @@ class TestCore:
         # Check config content
         config = BotConfig.load(bot_path)
         assert config.model_provider == "openai"
-        assert config.model_name == "gpt-4"
+        assert config.model_name == "gpt-4o"
 
     def test_create_bot_local(self, temp_cwd):
         """Test creating a local bot."""

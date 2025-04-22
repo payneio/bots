@@ -155,27 +155,5 @@ def start_session(bot_name: str, one_shot: bool = False, prompt: Optional[str] =
         print("Type '/help' for available commands.")
         print("\nBot is ready for your input! (Interactive mode not fully implemented yet)")
 
-        # Placeholder for interactive loop
-        while True:
-            try:
-                user_input = input("\nYou: ").strip()
-                if user_input.lower() == "/exit":
-                    break
-                elif user_input.lower() == "/help":
-                    print("\nAvailable commands:")
-                    print("  /help   - Show this help message")
-                    print("  /config - Show current bot configuration")
-                    print("  /exit   - Exit the session")
-                elif user_input.lower() == "/config":
-                    print("\nBot configuration:")
-                    print(json.dumps(json.loads(config.model_dump_json()), indent=2))
-                else:
-                    print(
-                        "\nBot: This is a placeholder response. AI integration not implemented yet."
-                    )
-            except KeyboardInterrupt:
-                print("\nExiting session.")
-                break
-            except Exception as e:
-                print(f"\nError: {e}")
-                continue
+        print("\nThis is the old placeholder implementation.")
+        print("Please use `bot run --name <name>` instead for the new implementation.")

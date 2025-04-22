@@ -24,11 +24,12 @@ class BotConfig(BaseModel):
     """Bot configuration."""
 
     model_provider: str = "openai"
-    model_name: str = "gpt-4"
+    model_name: str = "gpt-4o"
     temperature: float = 0.7
     tags: List[str] = Field(default_factory=list)
     api_key: str = "ENV:OPENAI_API_KEY"
     command_permissions: CommandPermissions = Field(default_factory=CommandPermissions)
+    system_prompt_path: Optional[str] = None
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "BotConfig":

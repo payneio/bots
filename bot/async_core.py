@@ -9,7 +9,7 @@ from bot.core import find_bot
 
 
 async def start_session(
-    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None
+    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, debug: bool = False
 ) -> None:
     """Start a bot session.
 
@@ -17,6 +17,7 @@ async def start_session(
         bot_name: The name of the bot to start
         one_shot: Whether to run in one-shot mode
         prompt: The user's prompt for one-shot mode
+        debug: Whether to print debug information
     """
     from bot.session import Session
 
@@ -30,15 +31,15 @@ async def start_session(
     except Exception as e:
         raise RuntimeError(f"Failed to load bot configuration: {e}")
 
-    # Add system prompt path to config for Session to use
-    setattr(config, "system_prompt_path", bot_path / "system_prompt.md")
+    # Set system prompt path
+    config.system_prompt_path = str(bot_path / "system_prompt.md")
 
     # Create session directory
     timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     session_path = bot_path / "sessions" / timestamp
 
     # Initialize session
-    session = Session(config, session_path)
+    session = Session(config, session_path, debug=debug)
 
     # Run session based on mode
     if one_shot:
@@ -50,7 +51,7 @@ async def start_session(
         await session.start_interactive()
 
 
-def run_session(bot_name: str, one_shot: bool = False, prompt: Optional[str] = None) -> None:
+def run_session(bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, debug: bool = False) -> None:
     """Run a bot session with asyncio event loop.
 
     This is a synchronous wrapper around start_session for use in the CLI.
@@ -59,5 +60,6 @@ def run_session(bot_name: str, one_shot: bool = False, prompt: Optional[str] = N
         bot_name: The name of the bot to start
         one_shot: Whether to run in one-shot mode
         prompt: The user's prompt for one-shot mode
+        debug: Whether to print debug information
     """
-    asyncio.run(start_session(bot_name, one_shot, prompt))
+    asyncio.run(start_session(bot_name, one_shot, prompt, debug))
