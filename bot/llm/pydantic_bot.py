@@ -39,12 +39,13 @@ class BotLLM:
         if self.debug:
             print(f"API key for {config.model_provider} is available ({len(self.api_key)} chars)", file=sys.stderr)
 
-        # Initialize the structured output generator
+        # Initialize the structured output generator with command permissions
         try:
             self.structured_generator = StructuredOutputGenerator(
                 api_key=self.api_key,
                 model_name=config.model_name,
                 temperature=config.temperature,
+                command_permissions=config.command_permissions,
                 debug=self.debug,
             )
         except Exception as e:
@@ -115,27 +116,39 @@ class BotLLM:
         
         conversation_history = "\n\n".join(conversation_parts)
         
-        # Add explicit instructions for structured output
+        # Add explicit instructions for structured output and command tool
         prompt = f"""
 {conversation_history}
 
 Please respond to the user in a helpful and conversational way.
 
-You are a CLI assistant that can suggest commands to help the user.
-If a command would be helpful, include it in your response.
+You are a CLI assistant that can suggest and execute commands to help the user.
+You have access to an execute_command tool that allows you to run shell commands.
+
+Command permissions:
+1. Commands in the 'allow' list can be executed immediately
+2. Commands in the 'deny' list will be rejected
+3. Other commands require user approval - you should suggest them in your response
+
+When you need to run a command to help the user:
+1. Use the execute_command tool with the command string
+2. You'll receive the command output and can use it in your response
+3. If a command requires approval, explain this in your response 
+4. Include all commands you executed in your final response
 
 YOUR RESPONSE MUST BE IN THIS EXACT JSON FORMAT:
 {{
   "reply": "Your detailed response to the user",
   "commands": [
     {{
-      "command": "command to run",
-      "reason": "why this command is needed"
+      "command": "command that was run",
+      "reason": "why this command was needed"
     }}
   ]
 }}
 
-The "commands" list can be empty if no commands are needed: 
+The "commands" list should include all commands you executed.
+If you didn't execute any commands, use an empty list: 
 {{ 
   "reply": "Your response without commands",
   "commands": []

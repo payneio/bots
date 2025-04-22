@@ -7,7 +7,7 @@ import pydantic_ai
 from rich.console import Console
 
 from bot.async_core import run_session
-from bot.core import create_bot, list_bots, rename_bot
+from bot.core import create_bot, delete_bot, list_bots, rename_bot
 
 console = Console()
 
@@ -124,6 +124,32 @@ def mv(old_name, new_name):
         console.print(f"[green]Renamed bot from {old_name} to {new_name} at {path}[/green]")
     except Exception as e:
         console.print(f"[red]Error renaming bot: {e}[/red]")
+        sys.exit(1)
+
+
+@main.command()
+@click.argument("bot_name")
+@click.option("--force", "-f", is_flag=True, help="Delete without confirmation")
+def rm(bot_name, force):
+    """Delete a bot.
+
+    Completely removes the bot and all of its data, including configuration,
+    system prompt, and session history. This operation cannot be undone.
+    """
+    try:
+        if not force:
+            confirmation = click.confirm(
+                f"This will permanently delete the bot '{bot_name}' and all its data. Continue?",
+                abort=True
+            )
+        
+        path = delete_bot(bot_name)
+        console.print(f"[green]Deleted bot: {bot_name} from {path}[/green]")
+    except click.Abort:
+        console.print("[yellow]Operation cancelled[/yellow]")
+        sys.exit(0)
+    except Exception as e:
+        console.print(f"[red]Error deleting bot: {e}[/red]")
         sys.exit(1)
 
 

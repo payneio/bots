@@ -18,6 +18,71 @@ class CommandPermissions(BaseModel):
     ask_if_unspecified: bool = Field(
         default=True, description="Ask for permission for unspecified commands"
     )
+    
+    @classmethod
+    def default_safe_permissions(cls) -> "CommandPermissions":
+        """Create default permissions with safe read-only commands.
+        
+        Returns:
+            CommandPermissions with pre-configured safe defaults
+        """
+        # Safe, read-only commands
+        read_only_commands = [
+            # File viewing and navigation
+            "ls", "dir", "pwd", "cd", "find", "locate", "which", "whereis", "type",
+            "file", "stat", "du", "df", "mount",
+            
+            # File content viewing
+            "cat", "less", "more", "head", "tail", "strings", "xxd", "hexdump",
+            "grep", "egrep", "fgrep", "rg", "ag", "ack",
+            
+            # Text processing
+            "echo", "printf", "wc", "sort", "uniq", "cut", "tr", "sed", "awk", "jq", "yq",
+            "fmt", "nl", "column", "paste", "join", "fold", "expand", "unexpand",
+            
+            # System information
+            "date", "cal", "uptime", "w", "whoami", "id", "groups", "uname",
+            "hostname", "lsb_release", "env", "printenv", "set", "locale",
+            
+            # Process information (read-only)
+            "ps", "top", "htop", "pgrep", "jobs", "lsof",
+            
+            # Network information (read-only)
+            "ip", "ifconfig", "netstat", "ss", "ping", "traceroute", "dig", "host", "nslookup",
+            "whois", "curl", "wget", "nc", "telnet",
+            
+            # Package information (read-only)
+            "apt-cache", "apt-get -s", "dpkg -l", "rpm -q", "pacman -Q", "brew list",
+            "npm list", "pip list", "gem list", "conda list",
+            
+            # Version information
+            "version", "--version", "-v", "-V", "help", "--help", "-h",
+            
+            # Git read operations
+            "git status", "git log", "git show", "git diff", "git ls-files", "git branch",
+            "git tag", "git remote", "git config -l",
+            
+            # Docker read operations
+            "docker ps", "docker images", "docker volume ls", "docker network ls",
+            
+            # Programming language utilities (read-only)
+            "python -c", "node -e", "ruby -e",
+            
+            # Compression view
+            "tar -tf", "unzip -l", "gzip -l", "zip -sf",
+        ]
+        
+        # Only deny system power commands that could disrupt the system
+        denied_commands = [
+            # System power commands that should be denied
+            "shutdown", "reboot", "poweroff", "halt"
+        ]
+        
+        return cls(
+            allow=read_only_commands,
+            deny=denied_commands,
+            ask_if_unspecified=True,
+        )
 
 
 class BotConfig(BaseModel):
@@ -28,7 +93,7 @@ class BotConfig(BaseModel):
     temperature: float = 0.7
     tags: List[str] = Field(default_factory=list)
     api_key: str = "ENV:OPENAI_API_KEY"
-    command_permissions: CommandPermissions = Field(default_factory=CommandPermissions)
+    command_permissions: CommandPermissions = Field(default_factory=CommandPermissions.default_safe_permissions)
     system_prompt_path: Optional[str] = None
 
     @classmethod

@@ -97,6 +97,29 @@ def rename_bot(old_name: str, new_name: str) -> Path:
     return new_path
 
 
+def delete_bot(bot_name: str) -> Path:
+    """Delete a bot completely.
+    
+    Args:
+        bot_name: The name of the bot to delete
+        
+    Returns:
+        The path that was deleted
+        
+    Raises:
+        FileNotFoundError: If the bot does not exist
+    """
+    bot_path = find_bot(bot_name)
+    if not bot_path:
+        raise FileNotFoundError(f"Bot '{bot_name}' not found")
+    
+    # Remove the entire bot directory with all its contents
+    import shutil
+    shutil.rmtree(bot_path)
+    
+    return bot_path
+
+
 def start_session(bot_name: str, one_shot: bool = False, prompt: Optional[str] = None) -> None:
     """Start a bot session."""
     bot_path = find_bot(bot_name)

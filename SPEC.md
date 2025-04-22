@@ -12,6 +12,7 @@ bot run --name/-n <name>          # Start interactive session
 bot run --name/-n <name> --one-shot  # Run in one-shot mode (reads from stdin)
 bot list                          # List all available bots (local & global)
 bot mv <old-name> <new-name>      # Rename a bot
+bot rm <name> [--force/-f]           # Delete a bot
 ```
 
 ---
