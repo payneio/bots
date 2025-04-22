@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 from bot.config import BotConfig
@@ -65,12 +66,18 @@ class BotLLM:
                 with open(path, "r") as f:
                     return f.read()
 
-        # Default system prompt
-        return (
-            "You are a helpful AI assistant. You can help with various tasks "
-            "and answer questions based on your knowledge. When appropriate, "
-            "you can run shell commands to help the user accomplish tasks."
-        )
+        # Default system prompt - read from the default_system_prompt.md file
+        default_prompt_path = Path(__file__).parent.parent / "default_system_prompt.md"
+        try:
+            with open(default_prompt_path, "r") as f:
+                return f.read()
+        except FileNotFoundError:
+            # Fallback if the file is not found
+            return (
+                "You are a helpful CLI assistant. You can help with various tasks "
+                "and answer questions based on your knowledge. When appropriate, "
+                "you can run shell commands to help the user accomplish tasks."
+            )
 
     def _get_role_name(self, role: MessageRole) -> str:
         """Get the role name as a string.

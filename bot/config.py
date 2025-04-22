@@ -86,12 +86,20 @@ def create_default_system_prompt(path: Union[str, Path]) -> None:
     system_prompt_path = Path(path) / "system_prompt.md"
 
     if not system_prompt_path.exists():
-        default_prompt = (
-            "You are a helpful AI assistant. You can help with various tasks "
-            "and answer questions based on your knowledge.\n\n"
-            "When appropriate, you can run shell commands to help the user "
-            "accomplish tasks, but always ask for permission if you're unsure."
-        )
+        # Read the default prompt from the module's default_system_prompt.md file
+        default_prompt_path = Path(__file__).parent / "default_system_prompt.md"
+        
+        try:
+            with open(default_prompt_path, "r") as f:
+                default_prompt = f.read()
+        except FileNotFoundError:
+            # Fallback if the file is not found
+            default_prompt = (
+                "You are a helpful CLI assistant. You can help with various tasks "
+                "and answer questions based on your knowledge.\n\n"
+                "When appropriate, you can run shell commands to help the user "
+                "accomplish tasks, but always ask for permission if you're unsure."
+            )
 
         with open(system_prompt_path, "w") as f:
             f.write(default_prompt)
