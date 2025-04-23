@@ -1,65 +1,105 @@
-#!/usr/bin/env python
-"""
-Test the default safe command permissions
+"""Test for the default permissions."""
 
-This script tests the default safe command permissions in the bot
-"""
-
-import asyncio
-import os
 import sys
 from pathlib import Path
 
-# Add the parent directory to sys.path to import bot modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from bot.config import BotConfig, CommandPermissions
-from bot.llm.pydantic_bot import BotLLM
-from bot.models import Message, MessageRole
+from bot.config import CommandPermissions
+from bot.llm.schemas import CommandAction
 
 
-def test_default_permissions():
-    """Test the default safe command permissions."""
-    print("Testing default safe command permissions")
+def main():
+    """Test default permissions configuration."""
+    # Get default permissions
+    permissions = CommandPermissions.default_safe_permissions()
     
-    # Create a config with default permissions
-    config = BotConfig()
+    print("Default permissions:")
+    print("-------------------")
+    print(f"Allow list: {len(permissions.allow)} commands")
+    print(f"Deny list: {len(permissions.deny)} commands")
     
-    # Print stats about the default permissions
-    print(f"Default allow list: {len(config.command_permissions.allow)} commands")
-    print(f"Default deny list: {len(config.command_permissions.deny)} commands")
+    # Test basic allowed commands
+    basic_commands = [
+        "ls -la",
+        "cat file.txt",
+        "grep pattern file.txt",
+        "ps aux",
+        "find . -name '*.py'",
+    ]
     
-    # Test a few example allowed commands
-    allowed_examples = ["ls", "cat", "grep", "echo", "find", "ps", "git status"]
-    print("\nTesting allow list with examples:")
-    for cmd in allowed_examples:
-        is_allowed = cmd in config.command_permissions.allow
-        print(f"  {cmd}: {'✅ Allowed' if is_allowed else '❌ Not in allow list'}")
+    # Test pattern-matched allowed commands
+    pattern_commands = [
+        "ls --color=auto",
+        "grep -i pattern file.txt",
+        "git log --oneline",
+        "curl -I https://example.com",
+        "jq '.key' file.json",
+        "sed 's/foo/bar/' file.txt",
+        "ps --forest",
+        "head -n 10 file.txt",
+        "tail -f log.txt",
+    ]
     
-    # Test a few example denied commands
-    denied_examples = ["rm", "mv", "sudo", "vim", "chmod", "ssh", "git push"]
-    print("\nTesting deny list with examples:")
-    for cmd in denied_examples:
-        is_denied = cmd in config.command_permissions.deny
-        print(f"  {cmd}: {'✅ Denied' if is_denied else '❌ Not in deny list'}")
+    # Test compound commands
+    compound_commands = [
+        "ls -la | grep pattern",
+        "find . -name '*.py' | xargs grep 'import'",
+        "ps aux | grep python | grep -v grep",
+        "cat file.txt | head -n 10",
+        "git log --oneline | grep 'feat:'",
+    ]
     
-    # Test ask_if_unspecified
-    print(f"\nAsk if unspecified: {config.command_permissions.ask_if_unspecified}")
+    # Test denied commands
+    denied_commands = [
+        "rm -rf /",
+        "shutdown -h now",
+        "reboot",
+        "apt-get install package",
+        "curl -X POST https://api.example.com",
+        "sudo apt update",
+        "systemctl restart service",
+    ]
     
-    # Create permissions with custom allow/deny lists
-    custom_perms = CommandPermissions(
-        allow=["custom1", "custom2"],
-        deny=["danger1", "danger2"],
-        ask_if_unspecified=False
-    )
+    # Test commands that should ask for permission
+    ask_commands = [
+        "npm install package",
+        "make install",
+        "docker build -t image .",
+        "gcc -o program program.c",
+        "rm file.txt",  # Simple rm without -r should ask
+    ]
     
-    print("\nCustom permissions still work:")
-    print(f"  Allow: {custom_perms.allow}")
-    print(f"  Deny: {custom_perms.deny}")
-    print(f"  Ask if unspecified: {custom_perms.ask_if_unspecified}")
+    print("\nTesting basic allowed commands:")
+    print("------------------------------")
+    for cmd in basic_commands:
+        action = permissions.validate_command(cmd)
+        print(f"{cmd: <40} -> {action.value}")
     
-    print("\n✅ Default permissions test successful!")
+    print("\nTesting pattern-matched allowed commands:")
+    print("---------------------------------------")
+    for cmd in pattern_commands:
+        action = permissions.validate_command(cmd)
+        print(f"{cmd: <40} -> {action.value}")
+    
+    print("\nTesting compound commands:")
+    print("------------------------")
+    for cmd in compound_commands:
+        action = permissions.validate_command(cmd)
+        print(f"{cmd: <40} -> {action.value}")
+    
+    print("\nTesting denied commands:")
+    print("-----------------------")
+    for cmd in denied_commands:
+        action = permissions.validate_command(cmd)
+        print(f"{cmd: <40} -> {action.value}")
+    
+    print("\nTesting commands that should ask for permission:")
+    print("----------------------------------------------")
+    for cmd in ask_commands:
+        action = permissions.validate_command(cmd)
+        print(f"{cmd: <40} -> {action.value}")
 
 
 if __name__ == "__main__":
-    test_default_permissions()
+    main()
