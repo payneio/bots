@@ -115,6 +115,10 @@ class Session:
         """
         self._log_event("command_execute", {"command": command})
 
+        # Display and log the command being executed
+        self.console.print(f"[blue]Executing:[/blue] {command}")
+        self.add_message(MessageRole.ASSISTANT, f"Executing: {command}")
+
         try:
             # Run the command
             process = await asyncio.create_subprocess_shell(
@@ -127,6 +131,14 @@ class Session:
             # Get results
             output = stdout.decode()
             error = stderr.decode() if process.returncode != 0 else None
+
+            # Log the command output in the conversation
+            if output:
+                self.add_message(MessageRole.ASSISTANT, f"Command output:\n```\n{output}\n```")
+            elif error:
+                self.add_message(MessageRole.ASSISTANT, f"Command error:\n```\n{error}\n```")
+            else:
+                self.add_message(MessageRole.ASSISTANT, "Command executed with no output")
 
             # Log command execution
             self.session_info.commands_run += 1
@@ -178,25 +190,23 @@ class Session:
 
         if action == CommandAction.EXECUTE:
             # Execute the command without asking
+            if command_request.reason:
+                self.console.print(f"\n[green]I need to:[/green] {command_request.reason}")
             return await self.execute_command(command_request.command)
 
         elif action == CommandAction.ASK:
-            # Ask the user for permission
-            self.console.print(
-                f"\n[yellow]Bot wants to run command:[/yellow] {command_request.command}"
+            # For ASK action, we now set a flag to prompt immediately rather than prompting here
+            # The actual prompting will happen in the main loop
+            self._log_event("command_needs_approval", {"command": command_request.command})
+            response = CommandResponse(
+                command=command_request.command,
+                output="",
+                exit_code=1,
+                error="This command requires user approval."
             )
-            self.console.print(f"[yellow]Reason:[/yellow] {command_request.reason}")
-
-            if Confirm.ask("Allow this command?"):
-                return await self.execute_command(command_request.command)
-            else:
-                self._log_event("command_denied", {"command": command_request.command})
-                return CommandResponse(
-                    command=command_request.command,
-                    output="Command denied by user",
-                    exit_code=1,
-                    error="Command was denied by the user",
-                )
+            # Add the needs_immediate_approval attribute
+            setattr(response, 'needs_immediate_approval', True)
+            return response
 
         else:  # CommandAction.DENY
             # Deny the command
@@ -291,14 +301,42 @@ class Session:
                         if command_response.exit_code == 0:
                             self.console.print("\n[green]Command output:[/green]")
                             self.console.print(command_response.output)
+                        elif hasattr(command_response, 'needs_immediate_approval') and command_response.needs_immediate_approval:
+                            # Command needs immediate approval - ask the user right away
+                            self.console.print(
+                                f"\n[yellow]Bot wants to run command:[/yellow] {command_request.command}"
+                            )
+                            if command_request.reason:
+                                self.console.print(f"[yellow]Reason:[/yellow] {command_request.reason}")
+                            
+                            if Confirm.ask("Allow this command?"):
+                                # User approved - run the command
+                                self.console.print("[green]Command approved - executing...[/green]")
+                                self._log_event("command_approved", {"command": command_request.command})
+                                
+                                # Execute the command
+                                approved_response = await self.execute_command(command_request.command)
+                                
+                                # Display the approved command's output
+                                if approved_response.exit_code == 0:
+                                    self.console.print("\n[green]Command output:[/green]")
+                                    self.console.print(approved_response.output)
+                                else:
+                                    self.console.print(
+                                        f"\n[red]Command error (exit code {approved_response.exit_code}):[/red]"
+                                    )
+                                    self.console.print(approved_response.error or approved_response.output)
+                            else:
+                                self.console.print("\n[red]Command was not approved[/red]")
                         else:
+                            # Regular error
                             self.console.print(
                                 f"\n[red]Command error (exit code {command_response.exit_code}):[/red]"
                             )
                             self.console.print(command_response.error or command_response.output)
 
                     # Display response
-                    self.console.print("\nBot:", response.message)
+                    self.console.print(f"\n[magenta]Bot: {response.message}[/magenta]")
 
                     # Add assistant message to conversation
                     self.add_message(MessageRole.ASSISTANT, response.message)

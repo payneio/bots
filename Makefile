@@ -1,4 +1,4 @@
-.PHONY: venv install build test test-all lint format clean
+.PHONY: venv install build test test-all lint format clean install-user install-dev
 
 # Dependency tracking files
 .venv/bin/python:
@@ -30,6 +30,18 @@ lint: .venv/.deps-installed
 # Format code
 format: .venv/.deps-installed
 	uv run ruff format .
+
+# Build the package
+build: .venv/.deps-installed
+	uv run python -m build
+
+# Install for development (editable mode)
+install-dev: .venv/.deps-installed
+	uv pip install -e .
+
+# Install for user (system-wide using pipx)
+install-user: build
+	pipx install --force dist/*.whl
 
 # Clean build artifacts and caches
 clean:

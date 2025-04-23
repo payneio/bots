@@ -13,6 +13,8 @@
 
 ## Installation
 
+### Development Installation
+
 ```bash
 # Create a virtual environment (if not already created)
 uv venv
@@ -20,8 +22,38 @@ uv venv
 # Activate the virtual environment (bash/zsh)
 source .venv/bin/activate
 
-# Install the package
+# Install the package in development mode
 uv pip install -e .
+```
+
+### System-wide Installation
+
+To install the bot command globally on your system:
+
+```bash
+# Using make (recommended)
+make install-user
+
+# OR directly with pipx
+uv run python -m build
+pipx install dist/*.whl
+```
+
+This will install the `bot` command as an isolated application available in your PATH.
+
+#### Prerequisites for System Installation
+
+1. You need to have pipx installed on your system
+2. If pipx is not installed, you can install it with:
+
+```bash
+# For Ubuntu/Debian
+sudo apt update && sudo apt install pipx
+pipx ensurepath  # Add pipx binaries to PATH
+
+# For other systems
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
 ```
 
 ## Usage
@@ -38,6 +70,9 @@ bot list
 
 # Rename a bot
 bot mv old-name new-name
+
+# Delete a bot
+bot rm mybot [--force]
 
 # One-shot mode
 echo "Summarize this file" | bot run --name mybot --one-shot
@@ -63,6 +98,15 @@ make format
 
 # Lint code
 make lint
+
+# Build the package
+make build
+
+# Install for development
+make install-dev
+
+# Install for user (system-wide)
+make install-user
 
 # Clean up build artifacts
 make clean
@@ -95,9 +139,15 @@ The following environment variables are used:
 
 ## Python Compatibility
 
-This project is designed to work with Python 3.9 and higher. The LLM integration has a compatibility layer:
+This project is designed to work with Python 3.9 and higher. For best results, use Python 3.13 or above.
 
-- With Python 3.10+: Uses pydantic-ai for full LLM integration
-- With Python 3.9: Falls back to a placeholder implementation
+### OpenAI API Key
+
+For the bot to work properly, you need to set up your OpenAI API key:
+
+```bash
+# Add to your ~/.bashrc or ~/.zshrc
+export OPENAI_API_KEY="your-api-key"
+```
 
 For detailed specifications, see [SPEC.md](SPEC.md).

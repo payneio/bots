@@ -14,6 +14,8 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 
 from bot.config import CommandPermissions
+from bot.utils import validate_command
+from bot.llm.schemas import CommandAction
 
 # Type variable for the output model
 T = TypeVar("T", bound=BaseModel)
@@ -165,11 +167,16 @@ If a command requires user approval, explain this in your response.
             if self.debug:
                 print(f"Command requested: {command}", file=sys.stderr)
 
-            # Get the base command (first word)
-            base_command = command.split()[0] if command else ""
-
-            # Validate command according to our permission model
-            if base_command in self.command_permissions.deny:
+            # Validate command using our utility function
+            action = validate_command(
+                command=command,
+                allow_list=self.command_permissions.allow,
+                deny_list=self.command_permissions.deny,
+                ask_if_unspecified=self.command_permissions.ask_if_unspecified
+            )
+            
+            # Handle the validation result
+            if action == CommandAction.DENY:
                 # DENY: Command is explicitly denied
                 if self.debug:
                     print(f"Command '{command}' is denied by bot permissions", file=sys.stderr)
@@ -180,31 +187,32 @@ If a command requires user approval, explain this in your response.
                     "exit_code": 1,
                     "status": "denied",
                 }
-            elif base_command in self.command_permissions.allow:
+            elif action == CommandAction.EXECUTE:
                 # EXECUTE: Command is explicitly allowed - continue to execution below
                 if self.debug:
                     print(f"Command '{command}' is allowed by bot permissions", file=sys.stderr)
                 # We'll proceed to execute this command after this validation block
-            elif self.command_permissions.ask_if_unspecified:
+            elif action == CommandAction.ASK:
                 # ASK: Command requires user approval
                 if self.debug:
                     print(f"Command '{command}' requires user approval", file=sys.stderr)
                 return {
                     "success": False,
                     "output": "",
-                    "error": f"Command '{command}' requires user approval. Please ask the user for permission.",
+                    "error": f"Command '{command}' requires user approval.",
                     "exit_code": 1,
                     "status": "needs_approval",
                     "command": command,
+                    "needs_immediate_approval": True,
                 }
             else:
-                # Default to DENY if not in allow list and ask_if_unspecified is False
+                # Default case (should not happen, but just in case)
                 if self.debug:
-                    print(f"Command '{command}' is not in the allow list and is denied by default", file=sys.stderr)
+                    print(f"Command '{command}' has an unknown validation status", file=sys.stderr)
                 return {
                     "success": False,
                     "output": "",
-                    "error": f"Command '{command}' is not in the allowed commands list",
+                    "error": f"Command '{command}' validation failed",
                     "exit_code": 1,
                     "status": "denied",
                 }

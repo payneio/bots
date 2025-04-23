@@ -10,6 +10,7 @@ from bot.llm.pydantic_tools import BotResponse as PydanticBotResponse
 from bot.llm.pydantic_tools import StructuredOutputGenerator
 from bot.llm.schemas import BotResponse, CommandAction
 from bot.models import Message, MessageRole, TokenUsage
+from bot.utils import validate_command
 
 
 class BotLLM:
@@ -179,6 +180,19 @@ IMPORTANT: This is for a pydantic schema with these fields:
         Raises:
             ValueError: If the response generation fails
         """
+        # Reload the system prompt to get any changes made by the user
+        if hasattr(self.config, "system_prompt_path") and self.config.system_prompt_path:
+            path = self.config.system_prompt_path
+            if os.path.exists(path):
+                try:
+                    with open(path, "r") as f:
+                        self.system_prompt = f.read()
+                        if self.debug:
+                            print(f"Reloaded system prompt from {path}", file=sys.stderr)
+                except Exception as e:
+                    if self.debug:
+                        print(f"Error reloading system prompt: {e}", file=sys.stderr)
+        
         # Create a prompt from the messages
         prompt = self._messages_to_prompt(messages)
 
@@ -240,20 +254,9 @@ IMPORTANT: This is for a pydantic schema with these fields:
         Returns:
             The action to take for this command
         """
-        # Get the base command (first word)
-        base_command = command.split()[0] if command else ""
-
-        # Check if command is explicitly allowed
-        if base_command in self.config.command_permissions.allow:
-            return CommandAction.EXECUTE
-
-        # Check if command is explicitly denied
-        if base_command in self.config.command_permissions.deny:
-            return CommandAction.DENY
-
-        # Check if we should ask for unspecified commands
-        if self.config.command_permissions.ask_if_unspecified:
-            return CommandAction.ASK
-
-        # Default to deny
-        return CommandAction.DENY
+        return validate_command(
+            command=command, 
+            allow_list=self.config.command_permissions.allow,
+            deny_list=self.config.command_permissions.deny,
+            ask_if_unspecified=self.config.command_permissions.ask_if_unspecified
+        )
