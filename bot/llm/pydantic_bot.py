@@ -129,35 +129,27 @@ You have access to an execute_command tool that allows you to run shell commands
 Command permissions:
 1. Commands in the 'allow' list can be executed immediately
 2. Commands in the 'deny' list will be rejected
-3. Other commands require user approval - you should suggest them in your response
+3. Other commands will prompt the user for approval before execution
 
 When you need to run a command to help the user:
-1. Use the execute_command tool with the command string
-2. You'll receive the command output and can use it in your response
-3. If a command requires approval, explain this in your response 
-4. Include all commands you executed in your final response
+1. Always use the execute_command tool DURING your thinking process
+2. The system will automatically prompt for user approval if needed
+3. If approved, you'll receive the command output to include in your response
+4. If denied, you'll receive an error message to inform your response
+5. Include the commands you ran and their outputs in your response text
 
-YOUR RESPONSE MUST BE IN THIS EXACT JSON FORMAT:
+YOUR RESPONSE SHOULD:
+1. Explain what commands you ran and why
+2. Include the command outputs in your text, formatted for readability
+3. Provide any necessary explanations of the outputs
+
+YOUR RESPONSE MUST BE IN THIS JSON FORMAT:
 {{
-  "reply": "Your detailed response to the user",
-  "commands": [
-    {{
-      "command": "command that was run",
-      "reason": "why this command was needed"
-    }}
-  ]
+  "reply": "Your detailed response to the user, including command outputs"
 }}
 
-The "commands" list should include all commands you executed.
-If you didn't execute any commands, use an empty list: 
-{{ 
-  "reply": "Your response without commands",
-  "commands": []
-}}
-
-IMPORTANT: This is for a pydantic schema with these fields:
+IMPORTANT: This is for a pydantic schema with:
 - reply: string (required)
-- commands: List[BotCommandRequest] (optional, default=[])
 """
         return prompt
 

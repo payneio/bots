@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import json
 import os
+import platform
 from pathlib import Path
 from typing import Any, Dict
 
@@ -56,6 +57,34 @@ class Session:
         self._save_session_info()
         self._save_conversation()
         self._save_session_log()
+
+    def _get_context_info(self) -> str:
+        """Generate context information about the bot and environment.
+
+        Returns:
+            A formatted string with context information
+        """
+        current_time = datetime.datetime.now()
+        formatted_date = current_time.strftime("%Y-%m-%d")
+        formatted_time = current_time.strftime("%H:%M:%S")
+
+        # Get system information
+        system_info = platform.system()
+        system_version = platform.version()
+
+        # Get bot configuration information
+        config_dir = self.session_path.parent.parent
+        model_info = f"{self.config.model_provider}/{self.config.model_name}"
+
+        context = f"""
+## Session Context:
+- Date: {formatted_date}
+- Time: {formatted_time}
+- System: {system_info} {system_version}
+- Bot Config Directory: {config_dir}
+- Model: {model_info}
+"""
+        return context
 
     def _save_session_info(self) -> None:
         """Save session info to disk."""
@@ -166,57 +195,7 @@ class Session:
                 error=str(e),
             )
 
-    def validate_command(self, command_request: CommandRequest) -> CommandAction:
-        """Validate a command against the bot's permissions.
-
-        Args:
-            command_request: The command request to validate
-
-        Returns:
-            The action to take for this command
-        """
-        return self.llm.validate_command(command_request.command)
-
-    async def handle_command_request(self, command_request: CommandRequest) -> CommandResponse:
-        """Handle a command request from the LLM.
-
-        Args:
-            command_request: The command request
-
-        Returns:
-            The command response
-        """
-        action = self.validate_command(command_request)
-
-        if action == CommandAction.EXECUTE:
-            # Execute the command without asking
-            if command_request.reason:
-                self.console.print(f"\n[green]I need to:[/green] {command_request.reason}")
-            return await self.execute_command(command_request.command)
-
-        elif action == CommandAction.ASK:
-            # For ASK action, we now set a flag to prompt immediately rather than prompting here
-            # The actual prompting will happen in the main loop
-            self._log_event("command_needs_approval", {"command": command_request.command})
-            response = CommandResponse(
-                command=command_request.command,
-                output="",
-                exit_code=1,
-                error="This command requires user approval."
-            )
-            # Add the needs_immediate_approval attribute
-            setattr(response, 'needs_immediate_approval', True)
-            return response
-
-        else:  # CommandAction.DENY
-            # Deny the command
-            self._log_event("command_denied", {"command": command_request.command})
-            return CommandResponse(
-                command=command_request.command,
-                output="Command denied by permissions",
-                exit_code=1,
-                error="This command is not allowed by the bot's permissions",
-            )
+    # Command validation is now handled exclusively in the execute_command tool
 
     async def handle_slash_command(self, command: str) -> bool:
         """Handle a slash command from the user.
@@ -229,15 +208,30 @@ class Session:
         """
         if command == "/help":
             self.console.print("\nAvailable commands:")
-            self.console.print("  /help   - Show this help message")
-            self.console.print("  /config - Show current bot configuration")
-            self.console.print("  /exit   - Exit the session")
+            self.console.print("  /help    - Show this help message")
+            self.console.print("  /config  - Open bot config directory in VS Code")
+            self.console.print("  /exit    - Exit the session")
             return True
 
         elif command == "/config":
-            self.console.print("\nBot configuration:")
-            config_dict = json.loads(self.config.model_dump_json())
-            self.console.print_json(json.dumps(config_dict, indent=2))
+            # Get the bot directory path (parent of the session_path)
+            bot_dir = self.session_path.parent.parent
+
+            try:
+                # Launch VS Code with the bot config directory
+                await asyncio.create_subprocess_shell(
+                    f"code {bot_dir}",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                self.console.print(
+                    f"\n[green]Opening VS Code with bot directory:[/green] {bot_dir}"
+                )
+                self._log_event("command_edit", {"directory": str(bot_dir)})
+            except Exception as e:
+                self.console.print(f"\n[red]Error opening VS Code:[/red] {e}")
+                self._log_event("command_error", {"command": "/config", "error": str(e)})
+
             return True
 
         elif command == "/exit":
@@ -258,9 +252,11 @@ class Session:
 
         # Add system message if not present
         if not any(m.role == MessageRole.SYSTEM for m in self.conversation.messages):
-            # Get system prompt
+            # Get system prompt and add context information
             system_prompt = self.llm.system_prompt
-            self.add_message(MessageRole.SYSTEM, system_prompt)
+            context_info = self._get_context_info()
+            enhanced_prompt = f"{system_prompt}\n\n{context_info}"
+            self.add_message(MessageRole.SYSTEM, enhanced_prompt)
 
         try:
             self.console.print("\nBot is ready for your input!")
@@ -293,47 +289,7 @@ class Session:
                     self.session_info.token_usage.completion_tokens += token_usage.completion_tokens
                     self.session_info.token_usage.total_tokens += token_usage.total_tokens
 
-                    # Process commands
-                    for command_request in response.commands:
-                        command_response = await self.handle_command_request(command_request)
-
-                        # Display command output
-                        if command_response.exit_code == 0:
-                            self.console.print("\n[green]Command output:[/green]")
-                            self.console.print(command_response.output)
-                        elif hasattr(command_response, 'needs_immediate_approval') and command_response.needs_immediate_approval:
-                            # Command needs immediate approval - ask the user right away
-                            self.console.print(
-                                f"\n[yellow]Bot wants to run command:[/yellow] {command_request.command}"
-                            )
-                            if command_request.reason:
-                                self.console.print(f"[yellow]Reason:[/yellow] {command_request.reason}")
-                            
-                            if Confirm.ask("Allow this command?"):
-                                # User approved - run the command
-                                self.console.print("[green]Command approved - executing...[/green]")
-                                self._log_event("command_approved", {"command": command_request.command})
-                                
-                                # Execute the command
-                                approved_response = await self.execute_command(command_request.command)
-                                
-                                # Display the approved command's output
-                                if approved_response.exit_code == 0:
-                                    self.console.print("\n[green]Command output:[/green]")
-                                    self.console.print(approved_response.output)
-                                else:
-                                    self.console.print(
-                                        f"\n[red]Command error (exit code {approved_response.exit_code}):[/red]"
-                                    )
-                                    self.console.print(approved_response.error or approved_response.output)
-                            else:
-                                self.console.print("\n[red]Command was not approved[/red]")
-                        else:
-                            # Regular error
-                            self.console.print(
-                                f"\n[red]Command error (exit code {command_response.exit_code}):[/red]"
-                            )
-                            self.console.print(command_response.error or command_response.output)
+                    # No need to process commands - they're already executed during LLM's thinking phase
 
                     # Display response
                     self.console.print(f"\n[magenta]Bot: {response.message}[/magenta]")
@@ -376,9 +332,11 @@ class Session:
         self._log_event("session_start", {"mode": "one_shot"})
 
         try:
-            # Add system message
+            # Add system message with context information
             system_prompt = self.llm.system_prompt
-            self.add_message(MessageRole.SYSTEM, system_prompt)
+            context_info = self._get_context_info()
+            enhanced_prompt = f"{system_prompt}\n\n{context_info}"
+            self.add_message(MessageRole.SYSTEM, enhanced_prompt)
 
             # Add user message
             self.add_message(MessageRole.USER, prompt)

@@ -1,5 +1,6 @@
 """Tests for session management."""
 
+import asyncio
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -130,43 +131,27 @@ async def test_execute_command(temp_session_dir, bot_config):
         assert session.session_info.commands_run == 1
 
 
-@pytest.mark.asyncio
-async def test_validate_command(temp_session_dir, bot_config):
-    """Test command validation."""
-    with patch("bot.session.BotLLM", MockBotLLM):
-        session = Session(bot_config, temp_session_dir)
-
-        # Test allowed command
-        cmd_request = CommandRequest(command="ls", reason="List files")
-        action = session.validate_command(cmd_request)
-        assert action == CommandAction.EXECUTE
-
-        # Test denied command
-        cmd_request = CommandRequest(command="rm -rf /", reason="Delete everything")
-        action = session.validate_command(cmd_request)
-        assert action == CommandAction.DENY
-
-        # Test unspecified command
-        cmd_request = CommandRequest(command="grep test", reason="Search for text")
-        action = session.validate_command(cmd_request)
-        assert action == CommandAction.ASK
+# Command validation and handling have been moved entirely to pydantic_tools.py
+# These tests are being removed as part of architectural simplification
 
 
 @pytest.mark.asyncio
-async def test_handle_command_request(temp_session_dir, bot_config):
-    """Test handling command requests."""
+async def test_interactive_session_start(temp_session_dir, bot_config):
+    """Test the start of an interactive session."""
     with patch("bot.session.BotLLM", MockBotLLM):
         session = Session(bot_config, temp_session_dir)
-
-        # Test allowed command
-        cmd_request = CommandRequest(command="echo 'test'", reason="Echo test")
-        with patch("rich.prompt.Confirm.ask", return_value=True):
-            response = await session.handle_command_request(cmd_request)
-
-        # Check response
-        assert response.command == "echo 'test'"
-        assert "test" in response.output
-        assert response.exit_code == 0
+        
+        # Mock the console.print method to avoid output during test
+        with patch("rich.console.Console.print"):
+            # Mock the input function to simulate user exit
+            with patch("builtins.input", side_effect=["/exit"]):
+                await session.start_interactive()
+        
+        # Check if system message was added with context information
+        assert len(session.conversation.messages) >= 1
+        assert session.conversation.messages[0].role == MessageRole.SYSTEM
+        assert "You are a test assistant." in session.conversation.messages[0].content
+        assert "Session Context:" in session.conversation.messages[0].content
 
 
 @pytest.mark.asyncio
@@ -179,6 +164,24 @@ async def test_handle_slash_command(temp_session_dir, bot_config):
         result = await session.handle_slash_command("/help")
         assert result is True  # Session should continue
 
+        # Test /config command (mock subprocess to prevent VS Code from launching)
+        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
+            # Mock subprocess to prevent VS Code from actually launching
+            mock_subprocess.return_value = asyncio.Future()
+            mock_subprocess.return_value.set_result(None)
+            
+            # Call the command handler
+            result = await session.handle_slash_command("/config")
+            
+            # Check that subprocess would be called with the right command
+            mock_subprocess.assert_called_once()
+            cmd = mock_subprocess.call_args[0][0]
+            assert "code" in cmd
+            assert str(temp_session_dir.parent.parent) in cmd
+            
+            # Verify the result
+            assert result is True  # Session should continue
+
         # Test /exit command
         result = await session.handle_slash_command("/exit")
         assert result is False  # Session should end
@@ -186,6 +189,28 @@ async def test_handle_slash_command(temp_session_dir, bot_config):
         # Test unknown command
         result = await session.handle_slash_command("/unknown")
         assert result is True  # Session should continue
+
+
+@pytest.mark.asyncio
+async def test_get_context_info(temp_session_dir, bot_config):
+    """Test the _get_context_info function."""
+    with patch("bot.session.BotLLM", MockBotLLM):
+        session = Session(bot_config, temp_session_dir)
+        context_info = session._get_context_info()
+        
+        # Check that context includes all expected sections
+        assert "Session Context:" in context_info
+        assert "Date:" in context_info
+        assert "Time:" in context_info
+        assert "System:" in context_info
+        assert "Bot Config Directory:" in context_info
+        assert "Model:" in context_info
+        
+        # Check that the config directory path is correct
+        assert str(temp_session_dir.parent.parent) in context_info
+        
+        # Check that the model info is correct
+        assert f"{bot_config.model_provider}/{bot_config.model_name}" in context_info
 
 
 @pytest.mark.asyncio
@@ -201,6 +226,8 @@ async def test_one_shot_session(temp_session_dir, bot_config):
         # Check if messages were added (system + user + assistant)
         assert len(session.conversation.messages) == 3
         assert session.conversation.messages[0].role == MessageRole.SYSTEM
+        assert "You are a test assistant." in session.conversation.messages[0].content
+        assert "Session Context:" in session.conversation.messages[0].content
         assert session.conversation.messages[1].role == MessageRole.USER
         assert session.conversation.messages[1].content == "Hello, bot!"
         assert session.conversation.messages[2].role == MessageRole.ASSISTANT

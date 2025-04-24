@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 
 from bot.config import CommandPermissions
-from bot.utils import validate_command
 from bot.llm.schemas import CommandAction
 
 # Type variable for the output model
@@ -24,31 +23,19 @@ T = TypeVar("T", bound=BaseModel)
 version = getattr(pydantic_ai, "__version__", "unknown")
 
 
-class BotCommandRequest(BaseModel):
-    """A command request from the bot to be executed in the user's shell."""
-
-    command: str
-    reason: str
-
-
 class BotResponse(BaseModel):
     """A structured response from the bot."""
 
     reply: str
-    commands: List[BotCommandRequest] = []
-    
+
     # Add method to convert to schema.BotResponse
     def to_schema_response(self):
         """Convert to schema.BotResponse."""
         from bot.llm.schemas import BotResponse as SchemaBotResponse
-        from bot.llm.schemas import CommandRequest
-        
+
         return SchemaBotResponse(
             message=self.reply,
-            commands=[
-                CommandRequest(command=cmd.command, reason=cmd.reason)
-                for cmd in self.commands
-            ]
+            commands=[],  # Commands are now always empty as they're executed during thinking
         )
 
 
@@ -56,12 +43,12 @@ class StructuredOutputGenerator:
     """Generator for structured outputs from LLM responses using pydantic-ai."""
 
     def __init__(
-        self, 
-        api_key: str, 
-        model_name: str = "gpt-4o", 
-        temperature: float = 0.7, 
+        self,
+        api_key: str,
+        model_name: str = "gpt-4o",
+        temperature: float = 0.7,
         command_permissions: CommandPermissions = None,
-        debug: bool = False
+        debug: bool = False,
     ):
         """Initialize the structured output generator.
 
@@ -71,7 +58,7 @@ class StructuredOutputGenerator:
             temperature: The temperature to use (default: 0.7)
             command_permissions: Permissions for command execution (optional)
             debug: Whether to print debug information (default: False)
-            
+
         Raises:
             Exception: If the agent cannot be initialized
         """
@@ -80,7 +67,6 @@ class StructuredOutputGenerator:
         self.temperature = temperature
         self.debug = debug
         self.command_permissions = command_permissions or CommandPermissions()
-        self.command_results = []
 
         # Set the API key in environment
         os.environ["OPENAI_API_KEY"] = api_key
@@ -88,7 +74,7 @@ class StructuredOutputGenerator:
         # Create the agent - we'll initialize a new one with the correct output_type for each request
         # This matches the pattern in the example code
         model_string = f"openai:{model_name}"
-        
+
         if self.debug:
             print(f"Using pydantic-ai version: {version}", file=sys.stderr)
             print(f"Will use model string: {model_string}", file=sys.stderr)
@@ -102,19 +88,21 @@ class StructuredOutputGenerator:
 
         Returns:
             An instance of the output type
-            
+
         Raises:
             Exception: If the LLM request fails
         """
-        # Reset command results from any previous run
-        self.command_results = []
+        # No command results to track anymore - they are included in the response text
 
         # Print verbose debug info if debug is enabled
         if self.debug:
-            print(f"Generating response with model={self.model_name}, temp={self.temperature}", file=sys.stderr)
+            print(
+                f"Generating response with model={self.model_name}, temp={self.temperature}",
+                file=sys.stderr,
+            )
             print(f"Output type: {output_type.__name__}", file=sys.stderr)
             print(f"Prompt length: {len(prompt)} chars", file=sys.stderr)
-        
+
         # Special treatment for BotResponse to make sure the format is clear
         if output_type.__name__ == "BotResponse":
             # Add instructions about the execute_command tool and permission system
@@ -142,7 +130,7 @@ If a command requires user approval, explain this in your response.
             temperature=self.temperature,
             instrument=self.debug,  # Only instrument if debug is enabled
         )
-        
+
         # Add the command execution tool
         @agent.tool
         async def execute_command(ctx: RunContext, command: str) -> Dict:
@@ -167,14 +155,9 @@ If a command requires user approval, explain this in your response.
             if self.debug:
                 print(f"Command requested: {command}", file=sys.stderr)
 
-            # Validate command using our utility function
-            action = validate_command(
-                command=command,
-                allow_list=self.command_permissions.allow,
-                deny_list=self.command_permissions.deny,
-                ask_if_unspecified=self.command_permissions.ask_if_unspecified
-            )
-            
+            # Validate command using the CommandPermissions class
+            action = self.command_permissions.validate_command(command)
+
             # Handle the validation result
             if action == CommandAction.DENY:
                 # DENY: Command is explicitly denied
@@ -193,18 +176,32 @@ If a command requires user approval, explain this in your response.
                     print(f"Command '{command}' is allowed by bot permissions", file=sys.stderr)
                 # We'll proceed to execute this command after this validation block
             elif action == CommandAction.ASK:
-                # ASK: Command requires user approval
+                # ASK: Command requires user approval - ask immediately
                 if self.debug:
                     print(f"Command '{command}' requires user approval", file=sys.stderr)
-                return {
-                    "success": False,
-                    "output": "",
-                    "error": f"Command '{command}' requires user approval.",
-                    "exit_code": 1,
-                    "status": "needs_approval",
-                    "command": command,
-                    "needs_immediate_approval": True,
-                }
+                    
+                # Import here to avoid circular imports
+                from rich.prompt import Confirm
+                from rich.console import Console
+                
+                console = Console()
+                console.print(f"\n[yellow]Bot wants to run command:[/yellow] {command}")
+                
+                # Ask for approval with a confirmation prompt
+                if Confirm.ask("Allow this command?"):
+                    # User approved - continue to execution
+                    console.print("[green]Command approved - executing...[/green]")
+                    # We'll proceed to execute this command after this block
+                else:
+                    # User denied - return error
+                    console.print("\n[red]Command was not approved[/red]")
+                    return {
+                        "success": False,
+                        "output": "",
+                        "error": f"Command '{command}' was not approved by the user.",
+                        "exit_code": 1,
+                        "status": "denied_by_user",
+                    }
             else:
                 # Default case (should not happen, but just in case)
                 if self.debug:
@@ -221,7 +218,7 @@ If a command requires user approval, explain this in your response.
             try:
                 if self.debug:
                     print(f"Executing command: {command}", file=sys.stderr)
-                    
+
                 process = await asyncio.create_subprocess_shell(
                     command,
                     stdout=asyncio.subprocess.PIPE,
@@ -234,14 +231,7 @@ If a command requires user approval, explain this in your response.
                 error = stderr.decode() if stderr and process.returncode != 0 else None
                 exit_code = process.returncode
 
-                # Store command result for later inclusion in BotResponse
-                command_result = {
-                    "command": command,
-                    "output": output,
-                    "error": error,
-                    "exit_code": exit_code
-                }
-                self.command_results.append(command_result)
+                # No need to store command results anymore - they will be included in the response text
 
                 if self.debug:
                     print(f"Command executed with exit code {exit_code}", file=sys.stderr)
@@ -268,33 +258,21 @@ If a command requires user approval, explain this in your response.
                     "error": str(e),
                     "exit_code": 1,
                 }
-        
+
         # Run the agent
         result = await agent.run(prompt)
-        
+
         if result.output is None:
             if self.debug:
                 print(f"Agent result had no output. Raw result: {result}", file=sys.stderr)
             raise ValueError("Agent returned None result")
-            
-        # For BotResponse, ensure commands executed are included
-        if output_type.__name__ == "BotResponse" and hasattr(result.output, "commands"):
-            # Check if there are executed commands that aren't in the response
-            existing_commands = {cmd.command for cmd in result.output.commands}
-            for cmd_result in self.command_results:
-                if cmd_result["command"] not in existing_commands:
-                    # Add this command to the response
-                    result.output.commands.append(BotCommandRequest(
-                        command=cmd_result["command"],
-                        reason="Command executed during response generation"
-                    ))
-                    if self.debug:
-                        print(f"Added executed command to response: {cmd_result['command']}", file=sys.stderr)
-            
+
+        # No need to add commands to the response anymore - the LLM includes them in the text
+
         if self.debug:
             print(f"Agent response generated successfully: {type(result.output)}", file=sys.stderr)
         return result.output
-        
+
     def generate_sync(self, prompt: str, output_type: Type[T]) -> T:
         """Generate a structured output from a prompt synchronously.
 
@@ -304,39 +282,39 @@ If a command requires user approval, explain this in your response.
 
         Returns:
             An instance of the output type
-            
+
         Raises:
             Exception: If the LLM request fails
         """
         # Note: The synchronous version does not support command tools
         # This is because the command execution is async. Use the async generate method
         # instead if you need command tool support.
-        
+
         if self.debug:
             print("Warning: generate_sync does not support command tools", file=sys.stderr)
-            
+
         # Special treatment for BotResponse to make sure the format is clear
         if output_type.__name__ == "BotResponse":
             # Add specific JSON format instructions
             prompt = f"{prompt}\n\nYour response MUST be in valid JSON format with 'reply' and 'commands' fields."
-        
+
         # Create an agent with the specific output_type for this request
         model_string = f"openai:{self.model_name}"
         agent = Agent(
             model=model_string,
             output_type=output_type,
             temperature=self.temperature,
-            instrument=self.debug  # Only instrument if debug is enabled
+            instrument=self.debug,  # Only instrument if debug is enabled
         )
-        
+
         # Run the agent synchronously
         result = agent.run_sync(prompt)
-        
+
         if result.output is None:
             if self.debug:
                 print(f"Agent result had no output. Raw result: {result}", file=sys.stderr)
             raise ValueError("Agent returned None result")
-            
+
         if self.debug:
             print(f"Agent response generated successfully: {type(result.output)}", file=sys.stderr)
         return result.output

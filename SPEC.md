@@ -7,35 +7,35 @@
 ## 🧰 Command Overview
 
 ```bash
-bot init <name> [--local]         # Create a new bot
-bot run --name/-n <name>          # Start interactive session
-bot run --name/-n <name> --one-shot  # Run in one-shot mode (reads from stdin)
+bot init <n> [--local]         # Create a new bot
+bot run --name/-n <n>          # Start interactive session
+bot run --name/-n <n> --one-shot  # Run in one-shot mode (reads from stdin)
 bot list                          # List all available bots (local & global)
 bot mv <old-name> <new-name>      # Rename a bot
-bot rm <name> [--force/-f]           # Delete a bot
+bot rm <n> [--force/-f]           # Delete a bot
 ```
 
 ---
 
 ## 📁 Bot Storage Locations
 
-- **Global bots:** `~/.config/bot/<name>/`
-- **Local bots:** `./.bot/<name>/` (project-specific)
+- **Global bots:** `~/.config/bot/<n>/`
+- **Local bots:** `./.bot/<n>/` (project-specific)
 
 ### 🔍 Lookup Order
 
-When launching `bot <name>`:
+When launching `bot <n>`:
 
-1. Look for `.bot/<name>/` in the current directory
-2. Fall back to `~/.config/bot/<name>/`
+1. Look for `.bot/<n>/` in the current directory
+2. Fall back to `~/.config/bot/<n>/`
 
 ---
 
-## 📂 Bot Directory Layout (`<name>/`)
+## 📂 Bot Directory Layout (`<n>/`)
 
 ```bash
 .bot/
-└── <name>/
+└── <n>/
     ├── config.json             # Bot config (model, tags, command rules)
     ├── system_prompt.md        # Editable natural language prompt
     └── sessions/
@@ -72,12 +72,18 @@ When launching `bot <name>`:
 
 ## ✍️ `system_prompt.md`
 
-Plaintext Markdown file with the assistant’s personality and instructions. Loaded at startup.
+Plaintext Markdown file with the assistant's personality and instructions. Loaded at startup.
 
 ```markdown
 You're a focused assistant that writes test code for this project using pytest.
 Ask the user for filenames before you begin.
 ```
+
+Every system prompt is automatically enhanced with session context information including:
+- Current date and time
+- System information
+- Bot configuration directory
+- Model information
 
 ---
 
@@ -119,7 +125,7 @@ Each bot session is logged in:
 ### 1. **Interactive Mode**
 
 ```bash
-bot <name>
+bot <n>
 ```
 
 - Multi-turn conversation
@@ -129,7 +135,7 @@ bot <name>
 ### 2. **One-shot / Streaming Mode**
 
 ```bash
-echo "Summarize this README" | bot <name>
+echo "Summarize this README" | bot <n>
 ```
 
 - Reads stdin, outputs single reply to stdout
@@ -149,7 +155,7 @@ echo "Summarize this README" | bot <name>
 ## ⌨️ Slash Commands (Interactive Mode Only)
 
 - `/help` — show list of available slash commands
-- `/config` — display current bot config
+- `/config` — open bot config directory in VS Code
 - `/exit` — exit the session
 
 ## Code
