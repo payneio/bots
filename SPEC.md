@@ -8,11 +8,11 @@
 
 ```bash
 bots init <n> [--local]         # Create a new bot
-bots run --name/-n <n>          # Start interactive session
-bots run --name/-n <n> --one-shot  # Run in one-shot mode (reads from stdin)
-bots list                          # List all available bots (local & global)
-bots mv <old-name> <new-name>      # Rename a bot
-bots rm <n> [--force/-f]           # Delete a bot
+bots run <n>                    # Start interactive session
+bots run <n> --one-shot         # Run in one-shot mode (reads from stdin)
+bots list                       # List all available bots (local & global)
+bots mv <old-name> <new-name>   # Rename a bot
+bots rm <n> [--force/-f]        # Delete a bot
 ```
 
 ---

@@ -25,7 +25,7 @@ def main(ctx: click.Context) -> None:
 
 
 @main.command(name="run", help="Start a bot session")
-@click.option("--name", "-n", required=True, help="Name of the bot to start a session with")
+@click.argument("name")
 @click.option("--one-shot", is_flag=True, help="Run in one-shot mode")
 @click.option("--debug", is_flag=True, help="Show debug information")
 def run_bot(name: str, one_shot: bool, debug: bool) -> None:
