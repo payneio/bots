@@ -101,7 +101,16 @@ class Session:
             conv_path = latest_session / "conversation.json"
             if conv_path.exists():
                 with open(conv_path, "r") as f:
-                    self.conversation = Conversation.model_validate_json(f.read())
+                    # Load and parse the conversation file
+                    conversation_data = f.read()
+                    if self.debug:
+                        self.console.print(f"[blue]Loading conversation data with length: {len(conversation_data)}[/blue]")
+                    self.conversation = Conversation.model_validate_json(conversation_data)
+                
+                # Debug the loaded conversation if needed
+                if self.debug:
+                    self.console.print(f"[green]Loaded {len(self.conversation.messages)} messages[/green]")
+                
                 loaded = True
                     
             # Load session info
@@ -131,13 +140,14 @@ class Session:
             self._save_session_log()
             
             # Print message count
-            msg_count = len(self.conversation.messages)
-            self.console.print(f"Loaded {msg_count} messages from previous session")
+            self.console.print(f"Loaded {len(self.conversation.messages)} messages from previous session")
             
             return True
         except Exception as e:
             if self.debug:
                 self.console.print(f"[red]Error loading previous session: {e}[/red]")
+                import traceback
+                traceback.print_exc()
             return False
             
     def _display_conversation_history(self) -> None:
@@ -145,13 +155,17 @@ class Session:
         if not self.conversation.messages:
             return
             
+        # Get user and assistant messages only (skip system message)
+        messages = [msg for msg in self.conversation.messages 
+                  if msg.role in (MessageRole.USER, MessageRole.ASSISTANT)]
+        
+        if not messages:
+            return
+            
         self.console.print("\n[bold]Previous conversation:[/bold]")
         
-        # Skip system message if present
-        start_index = 1 if self.conversation.messages[0].role == MessageRole.SYSTEM else 0
-        
-        # Display each message
-        for msg in self.conversation.messages[start_index:]:
+        # Display each message in order
+        for msg in messages:
             if msg.role == MessageRole.USER:
                 self.console.print(f"\nYou: {msg.content}")
             elif msg.role == MessageRole.ASSISTANT:
@@ -353,10 +367,9 @@ class Session:
         self.console.print("Type '/exit' to end the session.")
         self.console.print("Type '/help' for available commands.")
         
-        # Display conversation history if there are previous messages (user or assistant)
-        user_messages = [m for m in self.conversation.messages if m.role in (MessageRole.USER, MessageRole.ASSISTANT)]
-        if user_messages:
-            self._display_conversation_history()
+        # Always display conversation history when continuing a session
+        # The _display_conversation_history method will check if there are user/assistant messages
+        self._display_conversation_history()
 
         # Add system message if not present
         if not any(m.role == MessageRole.SYSTEM for m in self.conversation.messages):
