@@ -7,10 +7,10 @@ from unittest.mock import patch
 
 import pytest
 
-from bot.config import BotConfig
-from bot.llm.schemas import BotResponse, CommandAction, CommandRequest
-from bot.models import MessageRole, TokenUsage
-from bot.session import Session
+from bots.config import BotConfig
+from bots.llm.schemas import BotResponse, CommandAction
+from bots.models import MessageRole, TokenUsage
+from bots.session import Session
 
 
 @pytest.fixture
@@ -71,7 +71,7 @@ class MockBotLLM:
 async def test_session_init(temp_session_dir, bot_config):
     """Test session initialization."""
     # Mock the BotLLM class to avoid pydantic-ai dependency
-    with patch("bot.session.BotLLM", MockBotLLM):
+    with patch("bots.session.BotLLM", MockBotLLM):
         # Create session
         session = Session(bot_config, temp_session_dir)
 
@@ -90,7 +90,7 @@ async def test_session_init(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_add_message(temp_session_dir, bot_config):
     """Test adding messages to the session."""
-    with patch("bot.session.BotLLM", MockBotLLM):
+    with patch("bots.session.BotLLM", MockBotLLM):
         session = Session(bot_config, temp_session_dir)
 
         # Add user message
@@ -115,7 +115,7 @@ async def test_add_message(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_execute_command(temp_session_dir, bot_config):
     """Test executing commands."""
-    with patch("bot.session.BotLLM", MockBotLLM):
+    with patch("bots.session.BotLLM", MockBotLLM):
         session = Session(bot_config, temp_session_dir)
 
         # Execute a simple echo command
@@ -138,15 +138,15 @@ async def test_execute_command(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_interactive_session_start(temp_session_dir, bot_config):
     """Test the start of an interactive session."""
-    with patch("bot.session.BotLLM", MockBotLLM):
+    with patch("bots.session.BotLLM", MockBotLLM):
         session = Session(bot_config, temp_session_dir)
-        
+
         # Mock the console.print method to avoid output during test
         with patch("rich.console.Console.print"):
             # Mock the input function to simulate user exit
             with patch("builtins.input", side_effect=["/exit"]):
                 await session.start_interactive()
-        
+
         # Check if system message was added with context information
         assert len(session.conversation.messages) >= 1
         assert session.conversation.messages[0].role == MessageRole.SYSTEM
@@ -157,28 +157,28 @@ async def test_interactive_session_start(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_handle_slash_command(temp_session_dir, bot_config):
     """Test handling slash commands."""
-    with patch("bot.session.BotLLM", MockBotLLM):
+    with patch("bots.session.BotLLM", MockBotLLM):
         session = Session(bot_config, temp_session_dir)
 
         # Test /help command
         result = await session.handle_slash_command("/help")
         assert result is True  # Session should continue
 
-        # Test /config command (mock subprocess to prevent VS Code from launching)
+        # Test /code command (mock subprocess to prevent VS Code from launching)
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
             # Mock subprocess to prevent VS Code from actually launching
             mock_subprocess.return_value = asyncio.Future()
             mock_subprocess.return_value.set_result(None)
-            
+
             # Call the command handler
-            result = await session.handle_slash_command("/config")
-            
+            result = await session.handle_slash_command("/code")
+
             # Check that subprocess would be called with the right command
             mock_subprocess.assert_called_once()
             cmd = mock_subprocess.call_args[0][0]
             assert "code" in cmd
             assert str(temp_session_dir.parent.parent) in cmd
-            
+
             # Verify the result
             assert result is True  # Session should continue
 
@@ -194,10 +194,10 @@ async def test_handle_slash_command(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_get_context_info(temp_session_dir, bot_config):
     """Test the _get_context_info function."""
-    with patch("bot.session.BotLLM", MockBotLLM):
+    with patch("bots.session.BotLLM", MockBotLLM):
         session = Session(bot_config, temp_session_dir)
         context_info = session._get_context_info()
-        
+
         # Check that context includes all expected sections
         assert "Session Context:" in context_info
         assert "Date:" in context_info
@@ -205,10 +205,10 @@ async def test_get_context_info(temp_session_dir, bot_config):
         assert "System:" in context_info
         assert "Bot Config Directory:" in context_info
         assert "Model:" in context_info
-        
+
         # Check that the config directory path is correct
         assert str(temp_session_dir.parent.parent) in context_info
-        
+
         # Check that the model info is correct
         assert f"{bot_config.model_provider}/{bot_config.model_name}" in context_info
 
@@ -216,7 +216,7 @@ async def test_get_context_info(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_one_shot_session(temp_session_dir, bot_config):
     """Test one-shot session mode."""
-    with patch("bot.session.BotLLM", MockBotLLM):
+    with patch("bots.session.BotLLM", MockBotLLM):
         session = Session(bot_config, temp_session_dir)
 
         # Set up mocks for print function

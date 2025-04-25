@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field
 
-from bot.llm.schemas import CommandAction
+from bots.llm.schemas import CommandAction
 
 
 class CommandPermissions(BaseModel):
@@ -58,7 +58,7 @@ class CommandPermissions(BaseModel):
         Returns:
             The appropriate CommandAction (EXECUTE, ASK, or DENY)
         """
-        from bot.utils import normalize_command
+        from bots.utils import normalize_command
 
         # Normalize the command - this returns a list of components
         components = normalize_command(command)
@@ -68,7 +68,7 @@ class CommandPermissions(BaseModel):
             return CommandAction.ASK if self.ask_if_unspecified else CommandAction.DENY
 
         # For compound commands, we need to check permissions for each component
-        component_results = []
+        component_results: List[CommandAction] = []
 
         for component in components:
             base_cmd = component["command"]
@@ -101,12 +101,12 @@ class CommandPermissions(BaseModel):
                 # No args pattern or exact command match (without pattern) means match all usages
                 if args_pattern is None or pattern == base_cmd:
                     # No args pattern or exact command match - deny all usages
-                    component_results.append(CommandAction.DENY)
+                    component_results.append(CommandAction.DENY)  # type: ignore
                     denied = True
                     break
                 # Otherwise, check if args match the pattern
                 elif fnmatch.fnmatch(args_str, args_pattern):
-                    component_results.append(CommandAction.DENY)
+                    component_results.append(CommandAction.DENY)  # type: ignore
                     denied = True
                     break
 
@@ -125,7 +125,7 @@ class CommandPermissions(BaseModel):
                 # No args pattern or exact command match (without pattern) means match all usages
                 if args_pattern is None or pattern == base_cmd:
                     # No args pattern or exact command match - allow all usages
-                    component_results.append(CommandAction.EXECUTE)
+                    component_results.append(CommandAction.EXECUTE)  # type: ignore
                     allowed = True
                     break
                 # Otherwise, check if args match the pattern
@@ -163,7 +163,7 @@ class CommandPermissions(BaseModel):
             command: The command string
             always: If True, add to allow list for persistence
         """
-        from bot.utils import normalize_command
+        from bots.utils import normalize_command
 
         # For compound commands, we approve each component
         components = normalize_command(command)
@@ -199,7 +199,7 @@ class CommandPermissions(BaseModel):
             command: The command string
             always: If True, add to deny list for persistence
         """
-        from bot.utils import normalize_command
+        from bots.utils import normalize_command
 
         # For compound commands, we deny each component
         components = normalize_command(command)

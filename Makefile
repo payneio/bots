@@ -1,4 +1,4 @@
-.PHONY: venv install build test test-all lint format clean install-user install-dev
+.PHONY: venv install build test test-all lint format clean install-user install-dev typecheck
 
 # Dependency tracking files
 .venv/bin/python:
@@ -6,7 +6,7 @@
 
 .venv/.deps-installed: pyproject.toml .venv/bin/python
 	uv sync
-	uv pip install -e ".[dev]"
+	uv pip install -e . --group dev
 	touch .venv/.deps-installed
 
 # Virtual environment target
@@ -30,6 +30,10 @@ lint: .venv/.deps-installed
 # Format code
 format: .venv/.deps-installed
 	uv run ruff format .
+
+# Type check code
+typecheck: .venv/.deps-installed
+	uv run pyright bots
 
 # Build the package
 build: .venv/.deps-installed

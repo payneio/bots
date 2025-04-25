@@ -1,1 +1,1 @@
-include bot/default_system_prompt.md
+include bots/default_system_prompt.md

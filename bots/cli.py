@@ -6,18 +6,17 @@ import click
 import pydantic_ai
 from rich.console import Console
 
-from bot.async_core import run_session
-from bot.core import create_bot, delete_bot, list_bots, rename_bot
+from bots.async_core import run_session
+from bots.core import create_bot, delete_bot, list_bots, rename_bot
 
 console = Console()
 
-
 @click.group()
 @click.pass_context
-def main(ctx):
+def main(ctx: click.Context) -> None:
     """Modular CLI AI Assistants.
 
-    BOT is a command-line tool that launches project-specific or global AI assistants
+    BOTS is a command-line tool that launches project-specific or global AI assistants
     using configurable models and behaviors. Each assistant is self-contained,
     configurable, and can interact with the command line in safe, controlled ways.
     """
@@ -29,9 +28,9 @@ def main(ctx):
 @click.option("--name", "-n", required=True, help="Name of the bot to start a session with")
 @click.option("--one-shot", is_flag=True, help="Run in one-shot mode")
 @click.option("--debug", is_flag=True, help="Show debug information")
-def run_bot(name, one_shot, debug):
+def run_bot(name: str, one_shot: bool, debug: bool) -> None:
     """Start a session with a bot.
-    
+
     Starts an interactive session with the specified bot. If --one-shot is specified,
     reads from stdin for the prompt.
     """
@@ -40,16 +39,17 @@ def run_bot(name, one_shot, debug):
         console.print(f"Python version: {sys.version}")
         console.print(f"Python executable: {sys.executable}")
         console.print(f"pydantic-ai version: {getattr(pydantic_ai, '__version__', 'unknown')}")
-        
+
         # Check for API key
         import os
+
         api_key = os.environ.get("OPENAI_API_KEY")
         if api_key:
             console.print(f"OPENAI_API_KEY: [green]Present[/green] ({len(api_key)} chars)")
         else:
             console.print("OPENAI_API_KEY: [red]Not found in environment[/red]")
         console.print("")
-    
+
     if one_shot:
         # One-shot mode
         prompt = sys.stdin.read().strip()
@@ -65,12 +65,12 @@ def run_bot(name, one_shot, debug):
 
 @main.command()
 @click.argument("bot_name")
-@click.option("--local", is_flag=True, help="Create a local bot in ./.bot/ directory")
-def init(bot_name, local):
+@click.option("--local", is_flag=True, help="Create a local bot in ./.bots/ directory")
+def init(bot_name: str, local: bool) -> None:
     """Create a new bot.
 
     Creates a new bot with the given name. By default, bots are created globally
-    in ~/.config/bot/. Use --local to create a project-specific bot in ./.bot/.
+    in ~/.config/bots/. Use --local to create a project-specific bot in ./.bots/.
     """
     try:
         path = create_bot(bot_name, local=local)
@@ -81,16 +81,16 @@ def init(bot_name, local):
 
 
 @main.command()
-def list():
+def list() -> None:
     """List all available bots.
 
-    Shows all local bots (in the current directory's .bot folder)
-    and global bots (in ~/.config/bot/).
+    Shows all local bots (in the current directory's .bots folder)
+    and global bots (in ~/.config/bots/).
     """
     try:
         bots = list_bots()
         if not bots["global"] and not bots["local"]:
-            console.print("No bots found. Create one with 'bot init <n>'")
+            console.print("No bots found. Create one with 'bots init <n>'")
             return
 
         console.print("\n[bold]Available Bots:[/bold]")
@@ -113,7 +113,7 @@ def list():
 @main.command()
 @click.argument("old_name")
 @click.argument("new_name")
-def mv(old_name, new_name):
+def mv(old_name: str, new_name: str) -> None:
     """Rename a bot.
 
     Renames a bot from OLD_NAME to NEW_NAME while preserving all of its
@@ -130,7 +130,7 @@ def mv(old_name, new_name):
 @main.command()
 @click.argument("bot_name")
 @click.option("--force", "-f", is_flag=True, help="Delete without confirmation")
-def rm(bot_name, force):
+def rm(bot_name: str, force: bool) -> None:
     """Delete a bot.
 
     Completely removes the bot and all of its data, including configuration,
@@ -138,11 +138,11 @@ def rm(bot_name, force):
     """
     try:
         if not force:
-            confirmation = click.confirm(
+            click.confirm(
                 f"This will permanently delete the bot '{bot_name}' and all its data. Continue?",
-                abort=True
+                abort=True,
             )
-        
+
         path = delete_bot(bot_name)
         console.print(f"[green]Deleted bot: {bot_name} from {path}[/green]")
     except click.Abort:

@@ -1,11 +1,11 @@
 """OpenAI provider implementation."""
 
-from typing import AsyncIterator, List, Optional, Tuple
+from typing import AsyncIterator, Dict, List, Optional, Tuple
 
 from openai import AsyncOpenAI
 
-from bot.models import Message, TokenUsage
-from bot.providers.base import BaseProvider
+from bots.models import Message, TokenUsage
+from bots.providers.base import BaseProvider
 
 
 class OpenAIProvider(BaseProvider):
@@ -40,7 +40,7 @@ class OpenAIProvider(BaseProvider):
             The generated text and token usage
         """
         # Convert messages to the OpenAI format
-        openai_messages = []
+        openai_messages: List[Dict[str, str]] = []
 
         # Add system prompt
         openai_messages.append({"role": "system", "content": system_prompt})
@@ -61,11 +61,15 @@ class OpenAIProvider(BaseProvider):
         text = response.choices[0].message.content or ""
 
         # Extract token usage
-        token_usage = TokenUsage(
-            prompt_tokens=response.usage.prompt_tokens,
-            completion_tokens=response.usage.completion_tokens,
-            total_tokens=response.usage.total_tokens,
-        )
+        usage = response.usage
+        if usage is not None:
+            token_usage = TokenUsage(
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens,
+            )
+        else:
+            token_usage = TokenUsage()
 
         return text, token_usage
 
@@ -75,7 +79,7 @@ class OpenAIProvider(BaseProvider):
         system_prompt: str,
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-    ) -> AsyncIterator[Tuple[str, Optional[TokenUsage]]]:
+    ) -> AsyncIterator[tuple[str, Optional[TokenUsage]]]:
         """Generate a streaming response from the LLM.
 
         Args:
@@ -88,7 +92,7 @@ class OpenAIProvider(BaseProvider):
             Chunks of generated text and token usage (if available)
         """
         # Convert messages to the OpenAI format
-        openai_messages = []
+        openai_messages: List[Dict[str, str]] = []
 
         # Add system prompt
         openai_messages.append({"role": "system", "content": system_prompt})

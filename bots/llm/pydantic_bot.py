@@ -5,12 +5,12 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from bot.config import BotConfig
-from bot.llm.pydantic_tools import BotResponse as PydanticBotResponse
-from bot.llm.pydantic_tools import StructuredOutputGenerator
-from bot.llm.schemas import BotResponse, CommandAction
-from bot.models import Message, MessageRole, TokenUsage
-from bot.utils import validate_command
+from bots.config import BotConfig
+from bots.llm.pydantic_tools import BotResponse as PydanticBotResponse
+from bots.llm.pydantic_tools import StructuredOutputGenerator
+from bots.llm.schemas import BotResponse, CommandAction
+from bots.models import Message, MessageRole, TokenUsage
+from bots.utils import validate_command
 
 
 class BotLLM:
@@ -38,7 +38,10 @@ class BotLLM:
 
         # Print API key debug info only if debug is enabled
         if self.debug:
-            print(f"API key for {config.model_provider} is available ({len(self.api_key)} chars)", file=sys.stderr)
+            print(
+                f"API key for {config.model_provider} is available ({len(self.api_key)} chars)",
+                file=sys.stderr,
+            )
 
         # Initialize the structured output generator with command permissions
         try:
@@ -109,14 +112,14 @@ class BotLLM:
             A prompt string with clear instructions for structured output
         """
         # Extract the conversation history
-        conversation_parts = []
-        
+        conversation_parts: List[str] = []
+
         for message in messages:
             role_prefix = f"{self._get_role_name(message.role)}: "
             conversation_parts.append(f"{role_prefix}{message.content}")
-        
+
         conversation_history = "\n\n".join(conversation_parts)
-        
+
         # Add explicit instructions for structured output and command tool
         prompt = f"""
 {conversation_history}
@@ -168,7 +171,7 @@ IMPORTANT: This is for a pydantic schema with:
 
         Returns:
             The response and token usage
-            
+
         Raises:
             ValueError: If the response generation fails
         """
@@ -184,7 +187,7 @@ IMPORTANT: This is for a pydantic schema with:
                 except Exception as e:
                     if self.debug:
                         print(f"Error reloading system prompt: {e}", file=sys.stderr)
-        
+
         # Create a prompt from the messages
         prompt = self._messages_to_prompt(messages)
 
@@ -197,7 +200,7 @@ IMPORTANT: This is for a pydantic schema with:
             structured_response = await self.structured_generator.generate(
                 prompt=prompt, output_type=PydanticBotResponse
             )
-            
+
             # Convert structured response to BotResponse
             bot_response = structured_response.to_schema_response()
             if self.debug:
@@ -247,8 +250,8 @@ IMPORTANT: This is for a pydantic schema with:
             The action to take for this command
         """
         return validate_command(
-            command=command, 
+            command=command,
             allow_list=self.config.command_permissions.allow,
             deny_list=self.config.command_permissions.deny,
-            ask_if_unspecified=self.config.command_permissions.ask_if_unspecified
+            ask_if_unspecified=self.config.command_permissions.ask_if_unspecified,
         )

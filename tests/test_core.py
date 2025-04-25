@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from bot.config import BotConfig
-from bot.core import create_bot, find_bot, get_bot_paths, list_bots, rename_bot
+from bots.config import BotConfig
+from bots.core import create_bot, find_bot, get_bot_paths, list_bots, rename_bot
 
 
 class TestCore:
@@ -35,14 +35,14 @@ class TestCore:
     def test_get_bot_paths(self, temp_home, temp_cwd):
         """Test getting bot paths."""
         global_path, local_path = get_bot_paths()
-        assert global_path == temp_home / ".config" / "bot"
-        assert local_path == temp_cwd / ".bot"
+        assert global_path == temp_home / ".config" / "bots"
+        assert local_path == temp_cwd / ".bots"
 
     def test_create_bot_global(self, temp_home):
         """Test creating a global bot."""
         bot_path = create_bot("test-bot", local=False)
         assert bot_path.exists()
-        assert bot_path == temp_home / ".config" / "bot" / "test-bot"
+        assert bot_path == temp_home / ".config" / "bots" / "test-bot"
 
         # Check directory structure
         assert (bot_path / "config.json").exists()
@@ -58,7 +58,7 @@ class TestCore:
         """Test creating a local bot."""
         bot_path = create_bot("test-bot", local=True)
         assert bot_path.exists()
-        assert bot_path == temp_cwd / ".bot" / "test-bot"
+        assert bot_path == temp_cwd / ".bots" / "test-bot"
 
         # Check directory structure
         assert (bot_path / "config.json").exists()
@@ -74,10 +74,10 @@ class TestCore:
     def test_find_bot_local_first(self, temp_home, temp_cwd):
         """Test finding a bot, preferring local over global."""
         # Create both global and local bots with the same name
-        global_bot = temp_home / ".config" / "bot" / "test-bot"
+        global_bot = temp_home / ".config" / "bots" / "test-bot"
         global_bot.mkdir(parents=True)
 
-        local_bot = temp_cwd / ".bot" / "test-bot"
+        local_bot = temp_cwd / ".bots" / "test-bot"
         local_bot.mkdir(parents=True)
 
         # Should find the local one first
@@ -87,7 +87,7 @@ class TestCore:
     def test_find_bot_global_fallback(self, temp_home):
         """Test finding a global bot when local doesn't exist."""
         # Create only a global bot
-        global_bot = temp_home / ".config" / "bot" / "test-bot"
+        global_bot = temp_home / ".config" / "bots" / "test-bot"
         global_bot.mkdir(parents=True)
 
         found_path = find_bot("test-bot")
@@ -100,9 +100,9 @@ class TestCore:
     def test_list_bots(self, temp_home, temp_cwd):
         """Test listing bots."""
         # Create some global and local bots
-        (temp_home / ".config" / "bot" / "global1").mkdir(parents=True)
-        (temp_home / ".config" / "bot" / "global2").mkdir(parents=True)
-        (temp_cwd / ".bot" / "local1").mkdir(parents=True)
+        (temp_home / ".config" / "bots" / "global1").mkdir(parents=True)
+        (temp_home / ".config" / "bots" / "global2").mkdir(parents=True)
+        (temp_cwd / ".bots" / "local1").mkdir(parents=True)
 
         bots = list_bots()
         assert sorted(bots["global"]) == ["global1", "global2"]
@@ -118,7 +118,7 @@ class TestCore:
         new_path = rename_bot("old-name", "new-name")
         assert not bot_path.exists()
         assert new_path.exists()
-        assert new_path == temp_cwd / ".bot" / "new-name"
+        assert new_path == temp_cwd / ".bots" / "new-name"
 
     def test_rename_bot_not_found(self):
         """Test renaming a bot that doesn't exist."""

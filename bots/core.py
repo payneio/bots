@@ -5,13 +5,13 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from bot.config import BotConfig, create_default_system_prompt
+from bots.config import BotConfig, create_default_system_prompt
 
 
 def get_bot_paths() -> Tuple[Path, Path]:
     """Get paths for global and local bots."""
-    global_path = Path.home() / ".config" / "bot"
-    local_path = Path.cwd() / ".bot"
+    global_path = Path.home() / ".config" / "bots"
+    local_path = Path.cwd() / ".bots"
     return global_path, local_path
 
 
@@ -62,7 +62,7 @@ def list_bots() -> Dict[str, List[str]]:
     """List all available bots, both local and global."""
     global_path, local_path = get_bot_paths()
 
-    result = {"global": [], "local": []}
+    result: Dict[str, List[str]] = {"global": [], "local": []}
 
     # List global bots
     if global_path.exists():
@@ -99,24 +99,25 @@ def rename_bot(old_name: str, new_name: str) -> Path:
 
 def delete_bot(bot_name: str) -> Path:
     """Delete a bot completely.
-    
+
     Args:
         bot_name: The name of the bot to delete
-        
+
     Returns:
         The path that was deleted
-        
+
     Raises:
         FileNotFoundError: If the bot does not exist
     """
     bot_path = find_bot(bot_name)
     if not bot_path:
         raise FileNotFoundError(f"Bot '{bot_name}' not found")
-    
+
     # Remove the entire bot directory with all its contents
     import shutil
+
     shutil.rmtree(bot_path)
-    
+
     return bot_path
 
 

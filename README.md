@@ -1,6 +1,6 @@
-# 🧠 `bot` — Modular CLI AI Assistants
+# 🧠 `bots` — Modular CLI AI Assistants
 
-`bot` is a command-line tool that launches project-specific or global AI assistants using configurable models and behaviors. Each assistant is self-contained, configurable, and can interact with the command line in safe, controlled ways.
+`bots` is a command-line tool that launches project-specific or global AI assistants using configurable models and behaviors. Each assistant is self-contained, configurable, and can interact with the command line in safe, controlled ways.
 
 ## Features
 
@@ -39,7 +39,7 @@ uv run python -m build
 pipx install dist/*.whl
 ```
 
-This will install the `bot` command as an isolated application available in your PATH.
+This will install the `bots` command as an isolated application available in your PATH.
 
 #### Prerequisites for System Installation
 
@@ -60,22 +60,22 @@ python3 -m pipx ensurepath
 
 ```bash
 # Create a new bot
-bot init mybot [--local]
+bots init mybot [--local]
 
 # Start an interactive session
-bot run --name mybot  # or: bot run -n mybot
+bots run --name mybot  # or: bots run -n mybot
 
 # List all available bots
-bot list
+bots list
 
 # Rename a bot
-bot mv old-name new-name
+bots mv old-name new-name
 
 # Delete a bot
-bot rm mybot [--force]
+bots rm mybot [--force]
 
 # One-shot mode
-echo "Summarize this file" | bot run --name mybot --one-shot
+echo "Summarize this file" | bots run --name mybot --one-shot
 ```
 
 ## Development

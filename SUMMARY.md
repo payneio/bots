@@ -51,9 +51,9 @@ make format
 make lint
 
 # Basic CLI functionality works:
-bot init mybot [--local]            # Create a new bot
-bot list                            # List available bots
-bot mv old-name new-name            # Rename a bot
-bot run --name mybot                # Start interactive session
-bot run --name mybot --one-shot     # Run in one-shot mode (reads from stdin)
+bots init mybot [--local]            # Create a new bot
+bots list                            # List available bots
+bots mv old-name new-name            # Rename a bot
+bots run --name mybot                # Start interactive session
+bots run --name mybot --one-shot     # Run in one-shot mode (reads from stdin)
 ```

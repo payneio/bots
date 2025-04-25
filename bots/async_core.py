@@ -4,8 +4,8 @@ import asyncio
 import datetime
 from typing import Optional
 
-from bot.config import BotConfig
-from bot.core import find_bot
+from bots.config import BotConfig
+from bots.core import find_bot
 
 
 async def start_session(
@@ -19,7 +19,7 @@ async def start_session(
         prompt: The user's prompt for one-shot mode
         debug: Whether to print debug information
     """
-    from bot.session import Session
+    from bots.session import Session
 
     bot_path = find_bot(bot_name)
     if not bot_path:
@@ -51,7 +51,9 @@ async def start_session(
         await session.start_interactive()
 
 
-def run_session(bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, debug: bool = False) -> None:
+def run_session(
+    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, debug: bool = False
+) -> None:
     """Run a bot session with asyncio event loop.
 
     This is a synchronous wrapper around start_session for use in the CLI.

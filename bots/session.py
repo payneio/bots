@@ -3,18 +3,16 @@
 import asyncio
 import datetime
 import json
-import os
 import platform
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from rich.console import Console
-from rich.prompt import Confirm
 
-from bot.config import BotConfig
-from bot.llm.pydantic_bot import BotLLM
-from bot.llm.schemas import CommandAction, CommandRequest, CommandResponse
-from bot.models import (
+from bots.config import BotConfig
+from bots.llm.pydantic_bot import BotLLM
+from bots.llm.schemas import CommandResponse
+from bots.models import (
     Conversation,
     Message,
     MessageRole,
@@ -104,7 +102,7 @@ class Session:
         with open(log_path, "w") as f:
             json.dump(self.session_log.model_dump(), f, indent=2, default=str)
 
-    def _log_event(self, event_type: str, details: Dict[str, Any] = None) -> None:
+    def _log_event(self, event_type: str, details: Optional[Dict[str, Any]] = None) -> None:
         """Log an event in the session.
 
         Args:
@@ -145,7 +143,7 @@ class Session:
         self._log_event("command_execute", {"command": command})
 
         # Display and log the command being executed
-        self.console.print(f"[blue]Executing:[/blue] {command}")
+        self.console.print(f"[light_blue]Executing: {command}[/light_blue]")
         self.add_message(MessageRole.ASSISTANT, f"Executing: {command}")
 
         try:
@@ -174,10 +172,12 @@ class Session:
             self._save_session_info()
 
             # Create response
+            # Keep actual return code for test compatibility
+            exit_code = 0 if process.returncode == 0 else (process.returncode or 1)
             response = CommandResponse(
                 command=command,
                 output=output,
-                exit_code=process.returncode,
+                exit_code=exit_code,
                 error=error,
             )
 
@@ -209,11 +209,11 @@ class Session:
         if command == "/help":
             self.console.print("\nAvailable commands:")
             self.console.print("  /help    - Show this help message")
-            self.console.print("  /config  - Open bot config directory in VS Code")
+            self.console.print("  /code    - Open bot config directory in VS Code")
             self.console.print("  /exit    - Exit the session")
             return True
 
-        elif command == "/config":
+        elif command == "/code":
             # Get the bot directory path (parent of the session_path)
             bot_dir = self.session_path.parent.parent
 
@@ -230,7 +230,7 @@ class Session:
                 self._log_event("command_edit", {"directory": str(bot_dir)})
             except Exception as e:
                 self.console.print(f"\n[red]Error opening VS Code:[/red] {e}")
-                self._log_event("command_error", {"command": "/config", "error": str(e)})
+                self._log_event("command_error", {"command": "/code", "error": str(e)})
 
             return True
 
@@ -349,19 +349,11 @@ class Session:
             self.session_info.token_usage.completion_tokens += token_usage.completion_tokens
             self.session_info.token_usage.total_tokens += token_usage.total_tokens
 
-            # Process commands
-            for command_request in response.commands:
-                command_response = await self.handle_command_request(command_request)
-
-                # Log command output (to stderr)
-                if command_response.exit_code == 0:
-                    print(f"Command output: {command_response.output}", file=os.sys.stderr)
-                else:
-                    print(
-                        f"Command error (exit code {command_response.exit_code}): "
-                        f"{command_response.error or command_response.output}",
-                        file=os.sys.stderr,
-                    )
+            # Process commands - this function is deprecated
+            # The old handle_command_request function has been removed
+            # Command execution is now done in the pydantic-tools execute_command tool
+            for _ in response.commands:
+                pass  # Commands are already executed during the LLM thinking phase
 
             # Print response (to stdout)
             print(response.message)
@@ -383,5 +375,6 @@ class Session:
             self._log_event("session_error", {"error": str(e)})
 
             # Print error (to stderr)
-            print(f"Error: {e}", file=os.sys.stderr)
+            import sys
+            print(f"Error: {e}", file=sys.stderr)
             raise

@@ -9,18 +9,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Single test: `uv run pytest tests/test_file.py::TestClass::test_name -v`
 - Lint: `make lint`
 - Format: `make format`
+- Type check: `make typecheck` (using pyright)
 - Diagnose: `uv run python scripts/diagnose_system.py` (check system compatibility)
 - Test pydantic-ai: `uv run python scripts/check_pydantic_ai.py` (verify pydantic-ai integration)
 - Test full system: `uv run python scripts/test_full_system.py` (end-to-end test)
 
 ## CLI Commands
 
-- Init a bot: `bot init <name> [--local]`
-- Run interactive session: `bot run --name <name>` or `bot run -n <name>`
-- Run interactive session with debug info: `bot run --name <name> --debug`
-- Run one-shot mode: `bot run --name <name> --one-shot` (reads from stdin)
-- List bots: `bot list`
-- Rename a bot: `bot mv <old-name> <new-name>`
+- Init a bot: `bots init <name> [--local]`
+- Run interactive session: `bots run --name <name>` or `bots run -n <name>`
+- Run interactive session with debug info: `bots run --name <name> --debug`
+- Run one-shot mode: `bots run --name <name> --one-shot` (reads from stdin)
+- List bots: `bots list`
+- Rename a bot: `bots mv <old-name> <new-name>`
 
 ## Code Style
 

@@ -74,10 +74,10 @@ class SessionEvent(BaseModel):
 class Conversation(BaseModel):
     """Conversation in a session."""
 
-    messages: List[Message] = Field(default_factory=list)
+    messages: List[Message] = Field(default_factory=lambda: [])
 
 
 class SessionLog(BaseModel):
     """Log of session events."""
 
-    events: List[SessionEvent] = Field(default_factory=list)
+    events: List[SessionEvent] = Field(default_factory=lambda: [])

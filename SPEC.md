@@ -1,40 +1,40 @@
-# 🧠 `bot` — Modular CLI AI Assistants
+# 🧠 `bots` — Modular CLI AI Assistants
 
-`bot` is a command-line tool that launches project-specific or global AI assistants using configurable models and behaviors. Each assistant is self-contained, configurable, and can interact with the command line in safe, controlled ways.
+`bots` is a command-line tool that launches project-specific or global AI assistants using configurable models and behaviors. Each assistant is self-contained, configurable, and can interact with the command line in safe, controlled ways.
 
 ---
 
 ## 🧰 Command Overview
 
 ```bash
-bot init <n> [--local]         # Create a new bot
-bot run --name/-n <n>          # Start interactive session
-bot run --name/-n <n> --one-shot  # Run in one-shot mode (reads from stdin)
-bot list                          # List all available bots (local & global)
-bot mv <old-name> <new-name>      # Rename a bot
-bot rm <n> [--force/-f]           # Delete a bot
+bots init <n> [--local]         # Create a new bot
+bots run --name/-n <n>          # Start interactive session
+bots run --name/-n <n> --one-shot  # Run in one-shot mode (reads from stdin)
+bots list                          # List all available bots (local & global)
+bots mv <old-name> <new-name>      # Rename a bot
+bots rm <n> [--force/-f]           # Delete a bot
 ```
 
 ---
 
 ## 📁 Bot Storage Locations
 
-- **Global bots:** `~/.config/bot/<n>/`
-- **Local bots:** `./.bot/<n>/` (project-specific)
+- **Global bots:** `~/.config/bots/<n>/`
+- **Local bots:** `./.bots/<n>/` (project-specific)
 
 ### 🔍 Lookup Order
 
-When launching `bot <n>`:
+When launching `bots <n>`:
 
-1. Look for `.bot/<n>/` in the current directory
-2. Fall back to `~/.config/bot/<n>/`
+1. Look for `.bots/<n>/` in the current directory
+2. Fall back to `~/.config/bots/<n>/`
 
 ---
 
 ## 📂 Bot Directory Layout (`<n>/`)
 
 ```bash
-.bot/
+.bots/
 └── <n>/
     ├── config.json             # Bot config (model, tags, command rules)
     ├── system_prompt.md        # Editable natural language prompt
@@ -155,7 +155,7 @@ echo "Summarize this README" | bot <n>
 ## ⌨️ Slash Commands (Interactive Mode Only)
 
 - `/help` — show list of available slash commands
-- `/config` — open bot config directory in VS Code
+- `/code` — open bot config directory in VS Code
 - `/exit` — exit the session
 
 ## Code

@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import AsyncIterator, List, Optional
 
-from bot.models import Message, TokenUsage
+from bots.models import Message, TokenUsage
 
 
 class BaseProvider(ABC):

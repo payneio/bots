@@ -2,9 +2,9 @@
 
 from typing import Dict, Optional, Type
 
-from bot.config import BotConfig
-from bot.providers.base import BaseProvider
-from bot.providers.openai_provider import OpenAIProvider
+from bots.config import BotConfig
+from bots.providers.base import BaseProvider
+from bots.providers.openai_provider import OpenAIProvider
 
 
 class ProviderFactory:
@@ -49,4 +49,5 @@ class ProviderFactory:
             return OpenAIProvider(api_key=api_key, model_name=config.model_name)
 
         # Generic case (shouldn't be reached with current providers)
-        return provider_class(api_key=api_key)
+        # All providers should accept api_key, this will ignore the type error
+        return provider_class(api_key)  # type: ignore

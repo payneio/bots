@@ -34,7 +34,7 @@ class BotResponse(BaseModel):
     """A response from the bot."""
 
     message: str = Field(..., description="The message to display to the user")
-    commands: List[CommandRequest] = Field(default_factory=list, description="Commands to execute")
+    commands: List[CommandRequest] = Field(default_factory=lambda: [], description="Commands to execute")
 
 
 class BotRequest(BaseModel):
