@@ -28,11 +28,13 @@ def main(ctx: click.Context) -> None:
 @click.argument("name")
 @click.option("--one-shot", is_flag=True, help="Run in one-shot mode")
 @click.option("--debug", is_flag=True, help="Show debug information")
-def run_bot(name: str, one_shot: bool, debug: bool) -> None:
+@click.option("--continue", "continue_session", is_flag=True, help="Continue from previous session")
+def run_bot(name: str, one_shot: bool, debug: bool, continue_session: bool) -> None:
     """Start a session with a bot.
 
     Starts an interactive session with the specified bot. If --one-shot is specified,
-    reads from stdin for the prompt.
+    reads from stdin for the prompt. If --continue is specified, loads the previous
+    session history.
     """
     if debug:
         console.print("[bold blue]Debug Information:[/bold blue]")
@@ -54,13 +56,13 @@ def run_bot(name: str, one_shot: bool, debug: bool) -> None:
         # One-shot mode
         prompt = sys.stdin.read().strip()
         if prompt:
-            run_session(name, one_shot=True, prompt=prompt, debug=debug)
+            run_session(name, one_shot=True, prompt=prompt, debug=debug, continue_session=continue_session)
         else:
             console.print("[red]Error: No input provided for one-shot mode[/red]")
             sys.exit(1)
     else:
         # Interactive mode
-        run_session(name, debug=debug)
+        run_session(name, debug=debug, continue_session=continue_session)
 
 
 @main.command()

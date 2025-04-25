@@ -9,7 +9,8 @@ from bots.core import find_bot
 
 
 async def start_session(
-    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, debug: bool = False
+    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, 
+    debug: bool = False, continue_session: bool = False
 ) -> None:
     """Start a bot session.
 
@@ -18,6 +19,7 @@ async def start_session(
         one_shot: Whether to run in one-shot mode
         prompt: The user's prompt for one-shot mode
         debug: Whether to print debug information
+        continue_session: Whether to continue from previous session
     """
     from bots.session import Session
 
@@ -39,7 +41,7 @@ async def start_session(
     session_path = bot_path / "sessions" / timestamp
 
     # Initialize session
-    session = Session(config, session_path, debug=debug)
+    session = Session(config, session_path, debug=debug, continue_session=continue_session)
 
     # Run session based on mode
     if one_shot:
@@ -52,7 +54,8 @@ async def start_session(
 
 
 def run_session(
-    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, debug: bool = False
+    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, 
+    debug: bool = False, continue_session: bool = False
 ) -> None:
     """Run a bot session with asyncio event loop.
 
@@ -63,5 +66,6 @@ def run_session(
         one_shot: Whether to run in one-shot mode
         prompt: The user's prompt for one-shot mode
         debug: Whether to print debug information
+        continue_session: Whether to continue from previous session
     """
-    asyncio.run(start_session(bot_name, one_shot, prompt, debug))
+    asyncio.run(start_session(bot_name, one_shot, prompt, debug, continue_session))

@@ -1,6 +1,7 @@
 """Tests for session management."""
 
 import asyncio
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -9,7 +10,7 @@ import pytest
 
 from bots.config import BotConfig
 from bots.llm.schemas import BotResponse, CommandAction
-from bots.models import MessageRole, TokenUsage
+from bots.models import MessageRole, SessionStatus, TokenUsage
 from bots.session import Session
 
 
@@ -85,6 +86,65 @@ async def test_session_init(temp_session_dir, bot_config):
         assert session.session_info.provider == bot_config.model_provider
         assert session.session_info.num_messages == 0
         assert session.session_info.commands_run == 0
+        
+@pytest.mark.asyncio
+async def test_continue_session(temp_session_dir, bot_config):
+    """Test continuing from a previous session."""
+    # Mock the find_latest_session function
+    with patch("bots.core.find_latest_session") as mock_find_latest:
+        # Create a previous session directory and files
+        prev_session_dir = temp_session_dir.parent / "prev_session"
+        prev_session_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create session files in previous session directory
+        session_info = {
+            "start_time": "2025-04-01T12:00:00",
+            "model": "gpt-4",
+            "provider": "openai",
+            "token_usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            "num_messages": 2,
+            "commands_run": 1,
+            "status": "completed"
+        }
+        conversation = {
+            "messages": [
+                {"role": "system", "content": "You are a test assistant.", "timestamp": "2025-04-01T12:00:00"},
+                {"role": "user", "content": "Hello", "timestamp": "2025-04-01T12:01:00"},
+                {"role": "assistant", "content": "Hi there!", "timestamp": "2025-04-01T12:02:00"}
+            ]
+        }
+        session_log = {"events": []}
+        
+        with open(prev_session_dir / "session.json", "w") as f:
+            json.dump(session_info, f)
+        with open(prev_session_dir / "conversation.json", "w") as f:
+            json.dump(conversation, f)
+        with open(prev_session_dir / "log.json", "w") as f:
+            json.dump(session_log, f)
+            
+        # Mock the find_latest_session to return our previous session
+        mock_find_latest.return_value = prev_session_dir
+        
+        # Create a new session with continue_session flag
+        with patch("bots.session.BotLLM", MockBotLLM):
+            session = Session(bot_config, temp_session_dir, continue_session=True)
+            
+            # Check that previous messages were loaded
+            assert len(session.conversation.messages) == 3
+            assert session.conversation.messages[0].role == MessageRole.SYSTEM
+            assert session.conversation.messages[1].role == MessageRole.USER
+            assert session.conversation.messages[1].content == "Hello"
+            assert session.conversation.messages[2].role == MessageRole.ASSISTANT
+            assert session.conversation.messages[2].content == "Hi there!"
+            
+            # Check that token usage was loaded
+            assert session.session_info.token_usage.prompt_tokens == 100
+            assert session.session_info.token_usage.completion_tokens == 50
+            assert session.session_info.token_usage.total_tokens == 150
+            
+            # Check that status was reset to active
+            assert session.session_info.status == SessionStatus.ACTIVE
+            assert session.session_info.end_time is None
 
 
 @pytest.mark.asyncio

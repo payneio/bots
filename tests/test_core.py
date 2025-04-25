@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from bots.config import BotConfig
-from bots.core import create_bot, find_bot, get_bot_paths, list_bots, rename_bot
+from bots.core import create_bot, find_bot, find_latest_session, get_bot_paths, list_bots, rename_bot
 
 
 class TestCore:
@@ -37,6 +37,29 @@ class TestCore:
         global_path, local_path = get_bot_paths()
         assert global_path == temp_home / ".config" / "bots"
         assert local_path == temp_cwd / ".bots"
+        
+    def test_find_latest_session(self, temp_home):
+        """Test finding the latest session."""
+        # Create a bot with multiple sessions
+        bot_path = create_bot("test-bot", local=False)
+        
+        # Create session directories with timestamps
+        sessions_dir = bot_path / "sessions"
+        session1 = sessions_dir / "2025-04-01T10-00-00"
+        session2 = sessions_dir / "2025-04-02T10-00-00"  # Most recent
+        session1.mkdir(parents=True)
+        session2.mkdir(parents=True)
+        
+        # Test finding the latest session
+        latest = find_latest_session("test-bot")
+        assert latest == session2  # Should find the most recent one
+        
+        # Test with non-existent bot
+        assert find_latest_session("non-existent-bot") is None
+        
+        # Test with bot that has no sessions
+        empty_bot = create_bot("empty-bot", local=False)
+        assert find_latest_session("empty-bot") is None
 
     def test_create_bot_global(self, temp_home):
         """Test creating a global bot."""

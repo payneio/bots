@@ -15,6 +15,33 @@ def get_bot_paths() -> Tuple[Path, Path]:
     return global_path, local_path
 
 
+def find_latest_session(bot_name: str) -> Optional[Path]:
+    """Find the most recent session for a bot.
+    
+    Args:
+        bot_name: The name of the bot
+        
+    Returns:
+        Path to the most recent session directory or None if no sessions found
+    """
+    bot_path = find_bot(bot_name)
+    if not bot_path:
+        return None
+        
+    sessions_path = bot_path / "sessions"
+    if not sessions_path.exists():
+        return None
+        
+    # List all session directories and sort by name (timestamp)
+    sessions = sorted([d for d in sessions_path.iterdir() if d.is_dir()], reverse=True)
+    
+    if not sessions:
+        return None
+        
+    # Return the most recent one
+    return sessions[0]
+
+
 def find_bot(bot_name: str) -> Optional[Path]:
     """Find a bot by name, checking local then global paths."""
     global_path, local_path = get_bot_paths()

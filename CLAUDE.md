@@ -20,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run interactive session: `bots run <name>`
 - Run interactive session with debug info: `bots run <name> --debug`
 - Run one-shot mode: `bots run <name> --one-shot` (reads from stdin)
+- Continue previous session: `bots run <name> --continue`
 - List bots: `bots list`
 - Rename a bot: `bots mv <old-name> <new-name>`
 

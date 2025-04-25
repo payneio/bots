@@ -26,13 +26,14 @@ from bots.models import (
 class Session:
     """Interactive session with a bot."""
 
-    def __init__(self, config: BotConfig, session_path: Path, debug: bool = False):
+    def __init__(self, config: BotConfig, session_path: Path, debug: bool = False, continue_session: bool = False):
         """Initialize a session.
 
         Args:
             config: The bot configuration
             session_path: The path to the session directory
             debug: Whether to print debug information (default: False)
+            continue_session: Whether to continue from previous session (default: False)
         """
         self.config = config
         self.session_path = session_path
@@ -40,21 +41,76 @@ class Session:
         self.llm = BotLLM(config, debug=debug)
         self.console = Console()
 
-        # Initialize session data
-        self.session_info = SessionInfo(
-            model=config.model_name,
-            provider=config.model_provider,
-        )
-        self.conversation = Conversation()
-        self.session_log = SessionLog()
-
         # Ensure session directory exists
         self.session_path.mkdir(parents=True, exist_ok=True)
 
-        # Save initial session info
-        self._save_session_info()
-        self._save_conversation()
-        self._save_session_log()
+        if continue_session and self._load_previous_session():
+            if self.debug:
+                self.console.print("[blue]Continuing from previous session[/blue]")
+        else:
+            # Initialize new session data
+            self.session_info = SessionInfo(
+                model=config.model_name,
+                provider=config.model_provider,
+            )
+            self.conversation = Conversation()
+            self.session_log = SessionLog()
+
+            # Save initial session info
+            self._save_session_info()
+            self._save_conversation()
+            self._save_session_log()
+    
+    def _load_previous_session(self) -> bool:
+        """Load data from previous session.
+        
+        Returns:
+            True if successfully loaded, False otherwise
+        """
+        from bots.core import find_latest_session
+        
+        # Extract bot name from session path (parent folder of sessions)
+        bot_dir = self.session_path.parent.parent
+        bot_name = bot_dir.name
+        
+        # Find latest session
+        latest_session = find_latest_session(bot_name)
+        if not latest_session:
+            return False
+            
+        try:
+            # Load session info
+            info_path = latest_session / "session.json"
+            if info_path.exists():
+                with open(info_path, "r") as f:
+                    self.session_info = SessionInfo.model_validate_json(f.read())
+                    
+            # Load conversation
+            conv_path = latest_session / "conversation.json"
+            if conv_path.exists():
+                with open(conv_path, "r") as f:
+                    self.conversation = Conversation.model_validate_json(f.read())
+                    
+            # Load session log
+            log_path = latest_session / "log.json"
+            if log_path.exists():
+                with open(log_path, "r") as f:
+                    self.session_log = SessionLog.model_validate_json(f.read())
+                    
+            # Update session status to active again
+            self.session_info.status = SessionStatus.ACTIVE
+            self.session_info.end_time = None
+                
+            # Save data to new session directory
+            self._save_session_info()
+            self._save_conversation()
+            self._save_session_log()
+            
+            return True
+        except Exception as e:
+            if self.debug:
+                self.console.print(f"[red]Error loading previous session: {e}[/red]")
+            return False
 
     def _get_context_info(self) -> str:
         """Generate context information about the bot and environment.
