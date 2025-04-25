@@ -380,8 +380,6 @@ class Session:
             self.add_message(MessageRole.SYSTEM, enhanced_prompt)
 
         try:
-            self.console.print("\nBot is ready for your input!")
-
             while True:
                 try:
                     # Get user input - use a simple prompt
