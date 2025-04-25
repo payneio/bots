@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## CLI Commands
 
-- Init a bot: `bots init <name> [--local]`
+- Init a bot: `bots init <name> [--local] [--description/-d "description"]`
 - Run interactive session: `bots run <name>`
 - Run interactive session with debug info: `bots run <name> --debug`
 - Run one-shot mode: `bots run <name> --one-shot` (reads from stdin)

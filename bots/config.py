@@ -424,6 +424,7 @@ class BotConfig(BaseModel):
     model_provider: str = "openai"
     model_name: str = "gpt-4o"
     temperature: float = 0.7
+    description: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     api_key: str = "ENV:OPENAI_API_KEY"
     command_permissions: CommandPermissions = Field(

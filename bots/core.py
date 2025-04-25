@@ -73,8 +73,17 @@ def find_bot(bot_name: str) -> Optional[Path]:
     return None
 
 
-def create_bot(bot_name: str, local: bool = False) -> Path:
-    """Create a new bot with default configuration."""
+def create_bot(bot_name: str, local: bool = False, description: Optional[str] = None) -> Path:
+    """Create a new bot with default configuration.
+    
+    Args:
+        bot_name: Name of the bot to create
+        local: If True, create in local directory (.bots)
+        description: Optional description of the bot
+        
+    Returns:
+        Path to the created bot
+    """
     global_path, local_path = get_bot_paths()
 
     base_path = local_path if local else global_path
@@ -92,6 +101,8 @@ def create_bot(bot_name: str, local: bool = False) -> Path:
 
     # Create default config
     config = BotConfig()
+    if description:
+        config.description = description
     config.save(bot_path)
 
     # Create default system prompt
@@ -100,19 +111,42 @@ def create_bot(bot_name: str, local: bool = False) -> Path:
     return bot_path
 
 
-def list_bots() -> Dict[str, List[str]]:
-    """List all available bots, both local and global."""
+def list_bots() -> Dict[str, List[Dict[str, str]]]:
+    """List all available bots, both local and global, with their descriptions.
+    
+    Returns:
+        Dict with 'global' and 'local' keys, each containing a list of dict with 
+        'name' and optional 'description' for each bot
+    """
     global_path, local_path = get_bot_paths()
 
-    result: Dict[str, List[str]] = {"global": [], "local": []}
+    result: Dict[str, List[Dict[str, str]]] = {"global": [], "local": []}
 
     # List global bots
     if global_path.exists():
-        result["global"] = [p.name for p in global_path.iterdir() if p.is_dir()]
+        for p in global_path.iterdir():
+            if p.is_dir():
+                bot_info = {"name": p.name}
+                try:
+                    config = BotConfig.load(p)
+                    if config.description:
+                        bot_info["description"] = config.description
+                except:
+                    pass  # Just continue if we can't load the config
+                result["global"].append(bot_info)
 
     # List local bots
     if local_path.exists():
-        result["local"] = [p.name for p in local_path.iterdir() if p.is_dir()]
+        for p in local_path.iterdir():
+            if p.is_dir():
+                bot_info = {"name": p.name}
+                try:
+                    config = BotConfig.load(p)
+                    if config.description:
+                        bot_info["description"] = config.description
+                except:
+                    pass  # Just continue if we can't load the config
+                result["local"].append(bot_info)
 
     return result
 

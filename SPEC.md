@@ -7,7 +7,7 @@
 ## 🧰 Command Overview
 
 ```bash
-bots init <n> [--local]         # Create a new bot
+bots init <n> [--local] [--description/-d "..."]  # Create a new bot
 bots run <n>                    # Start interactive session
 bots run <n> --one-shot         # Run in one-shot mode (reads from stdin)
 bots run <n> --continue         # Continue previous session
@@ -55,6 +55,7 @@ When launching `bots <n>`:
   "model_provider": "openai",
   "model_name": "gpt-4",
   "temperature": 0.7,
+  "description": "A helpful coding assistant for Python projects",
   "tags": ["project", "codegen"],
   "api_key": "ENV:OPENAI_API_KEY",
   "command_permissions": {

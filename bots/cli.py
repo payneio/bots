@@ -1,6 +1,7 @@
 """Command-line interface for bot."""
 
 import sys
+from typing import Optional
 
 import click
 import pydantic_ai
@@ -68,15 +69,19 @@ def run_bot(name: str, one_shot: bool, debug: bool, continue_session: bool) -> N
 @main.command()
 @click.argument("bot_name")
 @click.option("--local", is_flag=True, help="Create a local bot in ./.bots/ directory")
-def init(bot_name: str, local: bool) -> None:
+@click.option("--description", "-d", help="Description of the bot's purpose or capabilities")
+def init(bot_name: str, local: bool, description: Optional[str] = None) -> None:
     """Create a new bot.
 
     Creates a new bot with the given name. By default, bots are created globally
     in ~/.config/bots/. Use --local to create a project-specific bot in ./.bots/.
+    You can provide a description with --description to help identify the bot's purpose.
     """
     try:
-        path = create_bot(bot_name, local=local)
+        path = create_bot(bot_name, local=local, description=description)
         console.print(f"[green]Created new bot: {bot_name} at {path}[/green]")
+        if description:
+            console.print(f"[green]Description: {description}[/green]")
     except Exception as e:
         console.print(f"[red]Error creating bot: {e}[/red]")
         sys.exit(1)
@@ -87,7 +92,8 @@ def list() -> None:
     """List all available bots.
 
     Shows all local bots (in the current directory's .bots folder)
-    and global bots (in ~/.config/bots/).
+    and global bots (in ~/.config/bots/), including their descriptions
+    if available.
     """
     try:
         bots = list_bots()
@@ -100,12 +106,18 @@ def list() -> None:
         if bots["local"]:
             console.print("\n[blue]Local Bots:[/blue]")
             for bot in bots["local"]:
-                console.print(f"  - {bot}")
+                if "description" in bot:
+                    console.print(f"  - {bot['name']} - [italic]{bot['description']}[/italic]")
+                else:
+                    console.print(f"  - {bot['name']}")
 
         if bots["global"]:
             console.print("\n[magenta]Global Bots:[/magenta]")
             for bot in bots["global"]:
-                console.print(f"  - {bot}")
+                if "description" in bot:
+                    console.print(f"  - {bot['name']} - [italic]{bot['description']}[/italic]")
+                else:
+                    console.print(f"  - {bot['name']}")
 
     except Exception as e:
         console.print(f"[red]Error listing bots: {e}[/red]")
