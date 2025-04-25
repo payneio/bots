@@ -8,6 +8,7 @@ import pydantic_ai
 from rich.console import Console
 
 from bots.async_core import run_session
+from bots.config import DEFAULT_BOT_EMOJI
 from bots.core import create_bot, delete_bot, list_bots, rename_bot
 
 console = Console()
@@ -106,18 +107,30 @@ def list() -> None:
         if bots["local"]:
             console.print("\n[blue]Local Bots:[/blue]")
             for bot in bots["local"]:
-                if "description" in bot:
-                    console.print(f"  - {bot['name']} - [italic]{bot['description']}[/italic]")
+                if isinstance(bot, str):
+                    console.print(f"  - {bot}")
                 else:
-                    console.print(f"  - {bot['name']}")
+                    # Use emoji from bot info if available, otherwise default
+                    emoji = bot.get("emoji", DEFAULT_BOT_EMOJI)
+                    
+                    if "description" in bot:
+                        console.print(f"  - {emoji} {bot['name']} - [italic]{bot['description']}[/italic]")
+                    else:
+                        console.print(f"  - {emoji} {bot['name']}")
 
         if bots["global"]:
             console.print("\n[magenta]Global Bots:[/magenta]")
             for bot in bots["global"]:
-                if "description" in bot:
-                    console.print(f"  - {bot['name']} - [italic]{bot['description']}[/italic]")
+                if isinstance(bot, str):
+                    console.print(f"  - {bot}")
                 else:
-                    console.print(f"  - {bot['name']}")
+                    # Use emoji from bot info if available, otherwise default
+                    emoji = bot.get("emoji", DEFAULT_BOT_EMOJI)
+                    
+                    if "description" in bot:
+                        console.print(f"  - {emoji} {bot['name']} - [italic]{bot['description']}[/italic]")
+                    else:
+                        console.print(f"  - {emoji} {bot['name']}")
 
     except Exception as e:
         console.print(f"[red]Error listing bots: {e}[/red]")

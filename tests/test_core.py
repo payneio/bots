@@ -7,7 +7,14 @@ from pathlib import Path
 import pytest
 
 from bots.config import BotConfig
-from bots.core import create_bot, find_bot, find_latest_session, get_bot_paths, list_bots, rename_bot
+from bots.core import (
+    create_bot,
+    find_bot,
+    find_latest_session,
+    get_bot_paths,
+    list_bots,
+    rename_bot,
+)
 
 
 class TestCore:
@@ -58,7 +65,7 @@ class TestCore:
         assert find_latest_session("non-existent-bot") is None
         
         # Test with bot that has no sessions
-        empty_bot = create_bot("empty-bot", local=False)
+        create_bot("empty-bot", local=False)
         assert find_latest_session("empty-bot") is None
 
     def test_create_bot_global(self, temp_home):
@@ -128,8 +135,13 @@ class TestCore:
         (temp_cwd / ".bots" / "local1").mkdir(parents=True)
 
         bots = list_bots()
-        assert sorted(bots["global"]) == ["global1", "global2"]
-        assert bots["local"] == ["local1"]
+        
+        # Extract just the names for testing
+        global_names = [bot["name"] for bot in bots["global"]]
+        local_names = [bot["name"] for bot in bots["local"]]
+        
+        assert sorted(global_names) == ["global1", "global2"]
+        assert local_names == ["local1"]
 
     def test_rename_bot(self, temp_cwd):
         """Test renaming a bot."""

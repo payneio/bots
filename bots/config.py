@@ -10,6 +10,10 @@ from pydantic import BaseModel, Field
 
 from bots.llm.schemas import CommandAction
 
+# Constants
+USER_EMOJI = "❯"
+DEFAULT_BOT_EMOJI = "🤖"
+
 
 class CommandPermissions(BaseModel):
     """Command permissions configuration."""
@@ -437,6 +441,9 @@ class BotConfig(BaseModel):
         default_factory=CommandPermissions.default_safe_permissions
     )
     system_prompt_path: Optional[str] = None
+    name: Optional[str] = None
+    emoji: Optional[str] = None
+    init_cwd: Optional[str] = None
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> "BotConfig":
@@ -502,11 +509,13 @@ def create_default_system_prompt(path: Union[str, Path]) -> None:
         except FileNotFoundError:
             # Fallback if the file is not found
             default_prompt = (
-                "You are a helpful CLI assistant. You can help with various tasks "
+                "You are {{ bot.emoji }} {{ bot.name }}, a helpful CLI assistant. You can help with various tasks "
                 "and answer questions based on your knowledge.\n\n"
                 "When appropriate, you can run shell commands to help the user "
                 "accomplish tasks, but always ask for permission if you're unsure."
             )
 
+        # Note: The template will be rendered when the bot runs, not at creation time
+        # This allows the template variables to be updated and immediately reflected
         with open(system_prompt_path, "w") as f:
             f.write(default_prompt)

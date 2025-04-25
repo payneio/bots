@@ -3,13 +3,16 @@
 import asyncio
 import datetime
 import json
+import os
 import platform
+import socket
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from liquid import Template
 from rich.console import Console
 
-from bots.config import BotConfig
+from bots.config import DEFAULT_BOT_EMOJI, USER_EMOJI, BotConfig
 from bots.llm.pydantic_bot import BotLLM
 from bots.llm.schemas import CommandResponse
 from bots.models import (
@@ -23,16 +26,28 @@ from bots.models import (
 )
 
 
+def bot_name_from_path(path: Path) -> str:
+    """Extract bot name from its config directory path.
+
+    Args:
+        path: Path to the bot config directory
+
+    Returns:
+        The name of the bot
+    """
+    return path.name
+
+
 class Session:
     """Interactive session with a bot."""
 
     def __init__(
-        self, 
-        config: BotConfig, 
-        session_path: Path, 
-        debug: bool = False, 
+        self,
+        config: BotConfig,
+        session_path: Path,
+        debug: bool = False,
         continue_session: bool = False,
-        latest_session: Optional[Path] = None
+        latest_session: Optional[Path] = None,
     ):
         """Initialize a session.
 
@@ -66,37 +81,37 @@ class Session:
             self._save_session_info()
             self._save_conversation()
             self._save_session_log()
-    
+
     def _load_previous_session(self, latest_session: Optional[Path] = None) -> bool:
         """Load data from previous session.
-        
+
         Args:
             latest_session: Path to the latest session (if known)
-            
+
         Returns:
             True if successfully loaded, False otherwise
         """
         # If latest_session wasn't provided, try to find it
         if latest_session is None:
             from bots.core import find_latest_session
-            
+
             # Extract bot name from session path (parent folder of sessions)
             bot_dir = self.session_path.parent.parent
             bot_name = bot_dir.name
-            
+
             # Find latest session
             latest_session = find_latest_session(bot_name)
-        
+
         if not latest_session:
             if self.debug:
                 self.console.print("[yellow]No previous sessions found[/yellow]")
             return False
-            
+
         self.console.print(f"Found previous session: \n{latest_session}")
-            
+
         try:
             loaded = False
-            
+
             # Load conversation first (most important)
             conv_path = latest_session / "conversation.json"
             if conv_path.exists():
@@ -104,73 +119,84 @@ class Session:
                     # Load and parse the conversation file
                     conversation_data = f.read()
                     if self.debug:
-                        self.console.print(f"[blue]Loading conversation data with length: {len(conversation_data)}[/blue]")
+                        self.console.print(
+                            f"[blue]Loading conversation data with length: {len(conversation_data)}[/blue]"
+                        )
                     self.conversation = Conversation.model_validate_json(conversation_data)
-                
+
                 # Debug the loaded conversation if needed
                 if self.debug:
-                    self.console.print(f"[green]Loaded {len(self.conversation.messages)} messages[/green]")
-                
+                    self.console.print(
+                        f"[green]Loaded {len(self.conversation.messages)} messages[/green]"
+                    )
+
                 loaded = True
-                    
+
             # Load session info
             info_path = latest_session / "session.json"
             if info_path.exists():
                 with open(info_path, "r") as f:
                     self.session_info = SessionInfo.model_validate_json(f.read())
                 loaded = True
-                    
+
             # Load session log
             log_path = latest_session / "log.json"
             if log_path.exists():
                 with open(log_path, "r") as f:
                     self.session_log = SessionLog.model_validate_json(f.read())
                 loaded = True
-                    
+
             if not loaded:
                 return False
-                
+
             # Update session status to active again
             self.session_info.status = SessionStatus.ACTIVE
             self.session_info.end_time = None
-                
+
             # Save data to new session directory
             self._save_session_info()
             self._save_conversation()
             self._save_session_log()
-            
+
             # Print message count
-            self.console.print(f"Loaded {len(self.conversation.messages)} messages from previous session")
-            
+            self.console.print(
+                f"Loaded {len(self.conversation.messages)} messages from previous session"
+            )
+
             return True
         except Exception as e:
             if self.debug:
                 self.console.print(f"[red]Error loading previous session: {e}[/red]")
                 import traceback
+
                 traceback.print_exc()
             return False
-            
+
     def _display_conversation_history(self) -> None:
         """Display the conversation history to the user."""
         if not self.conversation.messages:
             return
-            
+
         # Get user and assistant messages only (skip system message)
-        messages = [msg for msg in self.conversation.messages 
-                  if msg.role in (MessageRole.USER, MessageRole.ASSISTANT)]
-        
+        messages = [
+            msg
+            for msg in self.conversation.messages
+            if msg.role in (MessageRole.USER, MessageRole.ASSISTANT)
+        ]
+
         if not messages:
             return
-            
+
         self.console.print("\n[bold]Previous conversation:[/bold]")
-        
+
         # Display each message in order
         for msg in messages:
             if msg.role == MessageRole.USER:
-                self.console.print(f"\nYou: {msg.content}")
+                self.console.print(f"\n{USER_EMOJI} {msg.content}")
             elif msg.role == MessageRole.ASSISTANT:
-                self.console.print(f"\n[magenta]Bot: {msg.content}[/magenta]")
-        
+                emoji = self.config.emoji or DEFAULT_BOT_EMOJI
+                self.console.print(f"\n[magenta]{emoji} {msg.content}[/magenta]")
+
         self.console.print("\n[bold]---[/bold]")  # Divider between history and new session
 
     def _get_context_info(self) -> str:
@@ -187,19 +213,76 @@ class Session:
         system_info = platform.system()
         system_version = platform.version()
 
+        # Get environment information
+        hostname = socket.gethostname()
+        try:
+            username = os.getlogin()
+        except Exception:
+            username = os.environ.get("USER", "unknown")
+
+        # Use bot's initialized CWD if available, otherwise use current CWD
+        cwd = self.config.init_cwd if self.config.init_cwd else os.getcwd()
+        home_dir = os.path.expanduser("~")
+        ip_address = "127.0.0.1"  # Default for security
+        try:
+            # Try to get a non-loopback IP - just for information, non-critical
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip_address = s.getsockname()[0]
+            s.close()
+        except Exception:
+            pass
+
         # Get bot configuration information
         config_dir = self.session_path.parent.parent
-        model_info = f"{self.config.model_provider}/{self.config.model_name}"
 
-        context = f"""
-## Session Context:
-- Date: {formatted_date}
-- Time: {formatted_time}
-- System: {system_info} {system_version}
-- Bot Config Directory: {config_dir}
-- Model: {model_info}
+        # The backward compatibility code has been removed since tests were updated
+        # to look for "Environment Information" instead of "Session Context"
+
+        # Create template variables
+        template_vars = {
+            "date": formatted_date,
+            "time": formatted_time,
+            "system": {
+                "name": system_info,
+                "version": system_version,
+                "hostname": hostname,
+                "username": username,
+                "ip_address": ip_address,
+            },
+            "paths": {
+                "cwd": cwd,
+                "home": home_dir,
+                "config_dir": str(config_dir),
+            },
+            "bot": {
+                "name": self.config.name or bot_name_from_path(config_dir),
+                "emoji": self.config.emoji or DEFAULT_BOT_EMOJI,
+                "model_provider": self.config.model_provider,
+                "model_name": self.config.model_name,
+                "description": self.config.description or "No description available",
+            },
+        }
+
+        # Template for environment information
+        template_str = """
+## Environment Information
+- Bot: {{ bot.emoji }} {{ bot.name }} - {{ bot.description }}
+- Date: {{ date }}
+- Time: {{ time }}
+- System: {{ system.name }} {{ system.version }}
+- Hostname: {{ system.hostname }}
+- Username: {{ system.username }}
+- IP Address: {{ system.ip_address }}
+- Current Working Directory: {{ paths.cwd }}
+- Home Directory: {{ paths.home }}
+- Bot Config Directory: {{ paths.config_dir }}
+- Model: {{ bot.model_provider }}/{{ bot.model_name }}
 """
-        return context
+
+        # Render template with liquid
+        template = Template(template_str)
+        return template.render(**template_vars)
 
     def _save_session_info(self) -> None:
         """Save session info to disk."""
@@ -366,24 +449,49 @@ class Session:
         self.console.print("Starting interactive session with bot")
         self.console.print("Type '/exit' to end the session.")
         self.console.print("Type '/help' for available commands.")
-        
+
         # Always display conversation history when continuing a session
         # The _display_conversation_history method will check if there are user/assistant messages
         self._display_conversation_history()
 
         # Add system message if not present
         if not any(m.role == MessageRole.SYSTEM for m in self.conversation.messages):
-            # Get system prompt and add context information
-            system_prompt = self.llm.system_prompt
+            # Get system prompt, render it with template variables, and add context information
+            system_prompt_template = self.llm.system_prompt
+
+            # Create template vars for rendering the system prompt
+            current_time = datetime.datetime.now()
+            formatted_date = current_time.strftime("%Y-%m-%d")
+            formatted_time = current_time.strftime("%H:%M:%S")
+            config_dir = self.session_path.parent.parent
+            cwd = self.config.init_cwd if self.config.init_cwd else os.getcwd()
+
+            template_vars = {
+                "bot": {
+                    "name": self.config.name or bot_name_from_path(config_dir),
+                    "emoji": self.config.emoji or DEFAULT_BOT_EMOJI,
+                    "description": self.config.description or "No description available",
+                },
+                "date": formatted_date,
+                "time": formatted_time,
+                "cwd": cwd,
+                "config_dir": str(config_dir),
+            }
+
+            # Render the system prompt template
+            template = Template(system_prompt_template)
+            rendered_system_prompt = template.render(**template_vars)
+
+            # Add context information
             context_info = self._get_context_info()
-            enhanced_prompt = f"{system_prompt}\n\n{context_info}"
+            enhanced_prompt = f"{rendered_system_prompt}\n\n{context_info}"
             self.add_message(MessageRole.SYSTEM, enhanced_prompt)
 
         try:
             while True:
                 try:
                     # Get user input - use a simple prompt
-                    user_input = input("\nYou: ")
+                    user_input = input(f"\n{USER_EMOJI} ")
 
                     # Check if it's a slash command
                     if user_input.startswith("/"):
@@ -410,8 +518,9 @@ class Session:
 
                     # No need to process commands - they're already executed during LLM's thinking phase
 
-                    # Display response
-                    self.console.print(f"\n[magenta]Bot: {response.message}[/magenta]")
+                    # Display response with emoji
+                    emoji = self.config.emoji or DEFAULT_BOT_EMOJI
+                    self.console.print(f"\n[magenta]{emoji} {response.message}[/magenta]")
 
                     # Add assistant message to conversation
                     self.add_message(MessageRole.ASSISTANT, response.message)
@@ -451,10 +560,35 @@ class Session:
         self._log_event("session_start", {"mode": "one_shot"})
 
         try:
-            # Add system message with context information
-            system_prompt = self.llm.system_prompt
+            # Get system prompt, render it with template variables, and add context information
+            system_prompt_template = self.llm.system_prompt
+
+            # Create template vars for rendering the system prompt
+            current_time = datetime.datetime.now()
+            formatted_date = current_time.strftime("%Y-%m-%d")
+            formatted_time = current_time.strftime("%H:%M:%S")
+            config_dir = self.session_path.parent.parent
+            cwd = self.config.init_cwd if self.config.init_cwd else os.getcwd()
+
+            template_vars = {
+                "bot": {
+                    "name": self.config.name or bot_name_from_path(config_dir),
+                    "emoji": self.config.emoji or DEFAULT_BOT_EMOJI,
+                    "description": self.config.description or "No description available",
+                },
+                "date": formatted_date,
+                "time": formatted_time,
+                "cwd": cwd,
+                "config_dir": str(config_dir),
+            }
+
+            # Render the system prompt template
+            template = Template(system_prompt_template)
+            rendered_system_prompt = template.render(**template_vars)
+
+            # Add context information
             context_info = self._get_context_info()
-            enhanced_prompt = f"{system_prompt}\n\n{context_info}"
+            enhanced_prompt = f"{rendered_system_prompt}\n\n{context_info}"
             self.add_message(MessageRole.SYSTEM, enhanced_prompt)
 
             # Add user message
@@ -495,5 +629,6 @@ class Session:
 
             # Print error (to stderr)
             import sys
+
             print(f"Error: {e}", file=sys.stderr)
             raise

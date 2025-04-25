@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+import os
 from typing import Optional
 
 from bots.config import BotConfig
@@ -35,6 +36,12 @@ async def start_session(
 
     # Set system prompt path
     config.system_prompt_path = str(bot_path / "system_prompt.md")
+    
+    # Set current working directory if not already set
+    if not config.init_cwd:
+        config.init_cwd = os.getcwd()
+        # Save this value for future sessions
+        config.save(bot_path)
 
     # Create session directory (we need this path to exclude it from find_latest_session)
     timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")

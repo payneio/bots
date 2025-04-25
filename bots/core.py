@@ -2,10 +2,11 @@
 
 import datetime
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from bots.config import BotConfig, create_default_system_prompt
+from bots.config import DEFAULT_BOT_EMOJI, BotConfig, create_default_system_prompt
 
 
 def get_bot_paths() -> Tuple[Path, Path]:
@@ -17,42 +18,42 @@ def get_bot_paths() -> Tuple[Path, Path]:
 
 def find_latest_session(bot_name: str, exclude_session: Optional[Path] = None) -> Optional[Path]:
     """Find the most recent session for a bot.
-    
+
     Args:
         bot_name: The name of the bot
         exclude_session: Optional path to exclude from the search (e.g., current session)
-        
+
     Returns:
         Path to the most recent session directory or None if no sessions found
     """
     bot_path = find_bot(bot_name)
     if not bot_path:
         return None
-        
+
     sessions_path = bot_path / "sessions"
     if not sessions_path.exists():
         return None
-        
+
     # List all session directories and sort by name (timestamp)
     all_dirs = [d for d in sessions_path.iterdir() if d.is_dir()]
     if exclude_session:
         all_dirs = [d for d in all_dirs if d != exclude_session]
-    
+
     if not all_dirs:
         return None
-    
+
     # Filter out directories that don't look like timestamp directories
-    valid_dirs = [d for d in all_dirs if len(d.name) >= 19 and 'T' in d.name and '-' in d.name]
-    
+    valid_dirs = [d for d in all_dirs if len(d.name) >= 19 and "T" in d.name and "-" in d.name]
+
     if not valid_dirs:
         return None
-    
+
     # Sort by directory name (which is a timestamp string)
     sessions = sorted(valid_dirs, key=lambda d: d.name, reverse=True)
-    
+
     if not sessions:
         return None
-        
+
     # Return the most recent one
     return sessions[0]
 
@@ -75,12 +76,12 @@ def find_bot(bot_name: str) -> Optional[Path]:
 
 def create_bot(bot_name: str, local: bool = False, description: Optional[str] = None) -> Path:
     """Create a new bot with default configuration.
-    
+
     Args:
         bot_name: Name of the bot to create
         local: If True, create in local directory (.bots)
         description: Optional description of the bot
-        
+
     Returns:
         Path to the created bot
     """
@@ -101,8 +102,13 @@ def create_bot(bot_name: str, local: bool = False, description: Optional[str] = 
 
     # Create default config
     config = BotConfig()
+    config.name = bot_name
+    config.emoji = DEFAULT_BOT_EMOJI
+    config.init_cwd = os.getcwd()  # Save initial working directory
+
     if description:
         config.description = description
+
     config.save(bot_path)
 
     # Create default system prompt
@@ -113,9 +119,9 @@ def create_bot(bot_name: str, local: bool = False, description: Optional[str] = 
 
 def list_bots() -> Dict[str, List[Dict[str, str]]]:
     """List all available bots, both local and global, with their descriptions.
-    
+
     Returns:
-        Dict with 'global' and 'local' keys, each containing a list of dict with 
+        Dict with 'global' and 'local' keys, each containing a list of dict with
         'name' and optional 'description' for each bot
     """
     global_path, local_path = get_bot_paths()
@@ -131,7 +137,9 @@ def list_bots() -> Dict[str, List[Dict[str, str]]]:
                     config = BotConfig.load(p)
                     if config.description:
                         bot_info["description"] = config.description
-                except:
+                    if config.emoji:
+                        bot_info["emoji"] = config.emoji
+                except Exception:
                     pass  # Just continue if we can't load the config
                 result["global"].append(bot_info)
 
@@ -144,7 +152,9 @@ def list_bots() -> Dict[str, List[Dict[str, str]]]:
                     config = BotConfig.load(p)
                     if config.description:
                         bot_info["description"] = config.description
-                except:
+                    if config.emoji:
+                        bot_info["emoji"] = config.emoji
+                except Exception:
                     pass  # Just continue if we can't load the config
                 result["local"].append(bot_info)
 

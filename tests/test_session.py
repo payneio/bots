@@ -211,7 +211,7 @@ async def test_interactive_session_start(temp_session_dir, bot_config):
         assert len(session.conversation.messages) >= 1
         assert session.conversation.messages[0].role == MessageRole.SYSTEM
         assert "You are a test assistant." in session.conversation.messages[0].content
-        assert "Session Context:" in session.conversation.messages[0].content
+        assert "Environment Information" in session.conversation.messages[0].content
 
 
 @pytest.mark.asyncio
@@ -259,7 +259,7 @@ async def test_get_context_info(temp_session_dir, bot_config):
         context_info = session._get_context_info()
 
         # Check that context includes all expected sections
-        assert "Session Context:" in context_info
+        assert "Environment Information" in context_info
         assert "Date:" in context_info
         assert "Time:" in context_info
         assert "System:" in context_info
@@ -287,7 +287,7 @@ async def test_one_shot_session(temp_session_dir, bot_config):
         assert len(session.conversation.messages) == 3
         assert session.conversation.messages[0].role == MessageRole.SYSTEM
         assert "You are a test assistant." in session.conversation.messages[0].content
-        assert "Session Context:" in session.conversation.messages[0].content
+        assert "Environment Information" in session.conversation.messages[0].content
         assert session.conversation.messages[1].role == MessageRole.USER
         assert session.conversation.messages[1].content == "Hello, bot!"
         assert session.conversation.messages[2].role == MessageRole.ASSISTANT
