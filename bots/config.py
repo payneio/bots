@@ -409,6 +409,12 @@ class CommandPermissions(BaseModel):
             "pacman:-S*",
             "pacman:-R*",
             "pacman:-U*",
+            "nano",
+            "vim",
+            "vi",
+            "emacs",
+            "pico",
+            "ed",
         ]
 
         return cls(
