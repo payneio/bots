@@ -36,12 +36,25 @@ async def start_session(
     # Set system prompt path
     config.system_prompt_path = str(bot_path / "system_prompt.md")
 
-    # Create session directory
+    # Create session directory (we need this path to exclude it from find_latest_session)
     timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     session_path = bot_path / "sessions" / timestamp
+    session_path.mkdir(parents=True, exist_ok=True)
+    
+    # Get latest session before continuing (exclude current session path)
+    latest_session = None
+    if continue_session:
+        from bots.core import find_latest_session
+        latest_session = find_latest_session(bot_name, exclude_session=session_path)
 
     # Initialize session
-    session = Session(config, session_path, debug=debug, continue_session=continue_session)
+    session = Session(
+        config, 
+        session_path, 
+        debug=debug, 
+        continue_session=continue_session,
+        latest_session=latest_session
+    )
 
     # Run session based on mode
     if one_shot:

@@ -26,7 +26,14 @@ from bots.models import (
 class Session:
     """Interactive session with a bot."""
 
-    def __init__(self, config: BotConfig, session_path: Path, debug: bool = False, continue_session: bool = False):
+    def __init__(
+        self, 
+        config: BotConfig, 
+        session_path: Path, 
+        debug: bool = False, 
+        continue_session: bool = False,
+        latest_session: Optional[Path] = None
+    ):
         """Initialize a session.
 
         Args:
@@ -34,6 +41,7 @@ class Session:
             session_path: The path to the session directory
             debug: Whether to print debug information (default: False)
             continue_session: Whether to continue from previous session (default: False)
+            latest_session: Path to latest session (if known)
         """
         self.config = config
         self.session_path = session_path
@@ -41,12 +49,10 @@ class Session:
         self.llm = BotLLM(config, debug=debug)
         self.console = Console()
 
-        # Ensure session directory exists
-        self.session_path.mkdir(parents=True, exist_ok=True)
+        # Session directory should already exist (created in async_core.py)
 
-        if continue_session and self._load_previous_session():
-            if self.debug:
-                self.console.print("[blue]Continuing from previous session[/blue]")
+        if continue_session and self._load_previous_session(latest_session):
+            self.console.print("[blue]Continuing from previous session[/blue]")
         else:
             # Initialize new session data
             self.session_info = SessionInfo(
@@ -61,42 +67,60 @@ class Session:
             self._save_conversation()
             self._save_session_log()
     
-    def _load_previous_session(self) -> bool:
+    def _load_previous_session(self, latest_session: Optional[Path] = None) -> bool:
         """Load data from previous session.
         
+        Args:
+            latest_session: Path to the latest session (if known)
+            
         Returns:
             True if successfully loaded, False otherwise
         """
-        from bots.core import find_latest_session
+        # If latest_session wasn't provided, try to find it
+        if latest_session is None:
+            from bots.core import find_latest_session
+            
+            # Extract bot name from session path (parent folder of sessions)
+            bot_dir = self.session_path.parent.parent
+            bot_name = bot_dir.name
+            
+            # Find latest session
+            latest_session = find_latest_session(bot_name)
         
-        # Extract bot name from session path (parent folder of sessions)
-        bot_dir = self.session_path.parent.parent
-        bot_name = bot_dir.name
-        
-        # Find latest session
-        latest_session = find_latest_session(bot_name)
         if not latest_session:
+            if self.debug:
+                self.console.print("[yellow]No previous sessions found[/yellow]")
             return False
             
+        self.console.print(f"Found previous session: \n{latest_session}")
+            
         try:
+            loaded = False
+            
+            # Load conversation first (most important)
+            conv_path = latest_session / "conversation.json"
+            if conv_path.exists():
+                with open(conv_path, "r") as f:
+                    self.conversation = Conversation.model_validate_json(f.read())
+                loaded = True
+                    
             # Load session info
             info_path = latest_session / "session.json"
             if info_path.exists():
                 with open(info_path, "r") as f:
                     self.session_info = SessionInfo.model_validate_json(f.read())
-                    
-            # Load conversation
-            conv_path = latest_session / "conversation.json"
-            if conv_path.exists():
-                with open(conv_path, "r") as f:
-                    self.conversation = Conversation.model_validate_json(f.read())
+                loaded = True
                     
             # Load session log
             log_path = latest_session / "log.json"
             if log_path.exists():
                 with open(log_path, "r") as f:
                     self.session_log = SessionLog.model_validate_json(f.read())
+                loaded = True
                     
+            if not loaded:
+                return False
+                
             # Update session status to active again
             self.session_info.status = SessionStatus.ACTIVE
             self.session_info.end_time = None
@@ -106,11 +130,34 @@ class Session:
             self._save_conversation()
             self._save_session_log()
             
+            # Print message count
+            msg_count = len(self.conversation.messages)
+            self.console.print(f"Loaded {msg_count} messages from previous session")
+            
             return True
         except Exception as e:
             if self.debug:
                 self.console.print(f"[red]Error loading previous session: {e}[/red]")
             return False
+            
+    def _display_conversation_history(self) -> None:
+        """Display the conversation history to the user."""
+        if not self.conversation.messages:
+            return
+            
+        self.console.print("\n[bold]Previous conversation:[/bold]")
+        
+        # Skip system message if present
+        start_index = 1 if self.conversation.messages[0].role == MessageRole.SYSTEM else 0
+        
+        # Display each message
+        for msg in self.conversation.messages[start_index:]:
+            if msg.role == MessageRole.USER:
+                self.console.print(f"\nYou: {msg.content}")
+            elif msg.role == MessageRole.ASSISTANT:
+                self.console.print(f"\n[magenta]Bot: {msg.content}[/magenta]")
+        
+        self.console.print("\n[bold]---[/bold]")  # Divider between history and new session
 
     def _get_context_info(self) -> str:
         """Generate context information about the bot and environment.
@@ -305,6 +352,11 @@ class Session:
         self.console.print("Starting interactive session with bot")
         self.console.print("Type '/exit' to end the session.")
         self.console.print("Type '/help' for available commands.")
+        
+        # Display conversation history if there are previous messages (user or assistant)
+        user_messages = [m for m in self.conversation.messages if m.role in (MessageRole.USER, MessageRole.ASSISTANT)]
+        if user_messages:
+            self._display_conversation_history()
 
         # Add system message if not present
         if not any(m.role == MessageRole.SYSTEM for m in self.conversation.messages):

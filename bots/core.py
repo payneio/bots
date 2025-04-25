@@ -15,11 +15,12 @@ def get_bot_paths() -> Tuple[Path, Path]:
     return global_path, local_path
 
 
-def find_latest_session(bot_name: str) -> Optional[Path]:
+def find_latest_session(bot_name: str, exclude_session: Optional[Path] = None) -> Optional[Path]:
     """Find the most recent session for a bot.
     
     Args:
         bot_name: The name of the bot
+        exclude_session: Optional path to exclude from the search (e.g., current session)
         
     Returns:
         Path to the most recent session directory or None if no sessions found
@@ -33,7 +34,21 @@ def find_latest_session(bot_name: str) -> Optional[Path]:
         return None
         
     # List all session directories and sort by name (timestamp)
-    sessions = sorted([d for d in sessions_path.iterdir() if d.is_dir()], reverse=True)
+    all_dirs = [d for d in sessions_path.iterdir() if d.is_dir()]
+    if exclude_session:
+        all_dirs = [d for d in all_dirs if d != exclude_session]
+    
+    if not all_dirs:
+        return None
+    
+    # Filter out directories that don't look like timestamp directories
+    valid_dirs = [d for d in all_dirs if len(d.name) >= 19 and 'T' in d.name and '-' in d.name]
+    
+    if not valid_dirs:
+        return None
+    
+    # Sort by directory name (which is a timestamp string)
+    sessions = sorted(valid_dirs, key=lambda d: d.name, reverse=True)
     
     if not sessions:
         return None
