@@ -14,9 +14,10 @@ from pathlib import Path
 # Add the parent directory to sys.path to import bot modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
+
 from bots.config import BotConfig
 from bots.llm.pydantic_bot import BotLLM
-from bots.models import Message, MessageRole
 
 
 async def test_full_system():
@@ -48,19 +49,21 @@ async def test_full_system():
         print("Successfully initialized BotLLM")
 
         # Create test messages
-        messages = [
-            Message(
-                role=MessageRole.SYSTEM,
-                content="You are a helpful CLI assistant that can suggest commands.",
-            ),
-            Message(
-                role=MessageRole.USER, content="How do I list all files in the current directory?"
-            ),
-        ]
+        system_part = SystemPromptPart(
+            content="You are a helpful CLI assistant that can suggest commands."
+        )
+        system_message = ModelRequest(parts=[system_part])
+
+        user_part = UserPromptPart(content="How do I list all files in the current directory?")
+        user_message = ModelRequest(parts=[user_part])
+
+        messages = [system_message, user_message]
 
         print("\nGenerating response with messages:")
         for msg in messages:
-            print(f"- {msg.role}: {msg.content[:50]}...")
+            for part in msg.parts:
+                if hasattr(part, "content"):
+                    print(f"- {part.part_kind}: {part.content[:50]}...")
 
         # Generate response
         response, token_usage = await llm.generate_response(messages)
@@ -68,12 +71,7 @@ async def test_full_system():
         # Print results
         print("\nResponse generated successfully!")
         print(f"Message: {response.message[:100]}...")
-        print(f"Commands: {len(response.commands)} found")
-
-        for i, cmd in enumerate(response.commands):
-            print(f"\nCommand {i + 1}:")
-            print(f"  Command: {cmd.command}")
-            print(f"  Reason: {cmd.reason}")
+        print("Commands are executed directly via the execute_command tool")
 
         print("\nToken usage:")
         print(f"  Prompt tokens: {token_usage.prompt_tokens}")

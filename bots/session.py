@@ -7,18 +7,22 @@ import os
 import platform
 import socket
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from liquid import Template
+from pydantic_ai.messages import (
+    ModelMessagesTypeAdapter,
+    ModelRequest,
+    ModelResponse,
+    SystemPromptPart,
+    TextPart,
+    UserPromptPart,
+)
 from rich.console import Console
 
 from bots.config import DEFAULT_BOT_EMOJI, USER_EMOJI, BotConfig, load_system_prompt
-from bots.llm.pydantic_bot import BotLLM
-from bots.llm.schemas import CommandResponse
+from bots.llm.pydantic_bot import BotLLM, Message
 from bots.models import (
-    Conversation,
-    Message,
-    MessageRole,
     SessionEvent,
     SessionInfo,
     SessionLog,
@@ -74,12 +78,13 @@ class Session:
                 model=config.model_name,
                 provider=config.model_provider,
             )
-            self.conversation = Conversation()
+            # Initialize empty messages list instead of Conversation
+            self.messages: List[Message] = []
             self.session_log = SessionLog()
 
             # Save initial session info
             self._save_session_info()
-            self._save_conversation()
+            self._save_messages()
             self._save_session_log()
 
     def _refresh_system_prompt(self) -> None:
@@ -106,13 +111,20 @@ class Session:
         context_info = self._get_context_info()
         enhanced = f"{rendered}\n\n{context_info}"
 
+        # Create a system message with the rendered prompt
+        system_part = SystemPromptPart(content=enhanced)
+        system_message = ModelRequest(parts=[system_part])
+
         # Replace existing system message or insert it
-        for idx, msg in enumerate(self.conversation.messages):
-            if msg.role == MessageRole.SYSTEM:
-                self.conversation.messages[idx] = Message(MessageRole.SYSTEM, enhanced)
+        for idx, msg in enumerate(self.messages):
+            if msg.kind == "request" and any(
+                part.part_kind == "system-prompt" for part in msg.parts
+            ):
+                self.messages[idx] = system_message
                 break
         else:
-            self.conversation.messages.insert(0, Message(MessageRole.SYSTEM, enhanced))
+            # No system message found, insert at beginning
+            self.messages.insert(0, system_message)
 
     def _load_previous_session(self, latest_session: Optional[Path] = None) -> bool:
         """Load data from previous session.
@@ -144,25 +156,41 @@ class Session:
         try:
             loaded = False
 
-            # Load conversation first (most important)
-            conv_path = latest_session / "conversation.json"
-            if conv_path.exists():
-                with open(conv_path, "r") as f:
-                    # Load and parse the conversation file
-                    conversation_data = f.read()
+            # Load messages first (most important)
+            messages_path = latest_session / "messages.json"
+            if messages_path.exists():
+                try:
+                    with open(messages_path, "rb") as f:
+                        # Load and parse the messages file
+                        messages_data = f.read()
+                        if self.debug:
+                            self.console.print(
+                                f"[blue]Loading messages data with length: {len(messages_data)}[/blue]"
+                            )
+                        self.messages = ModelMessagesTypeAdapter.validate_json(messages_data)
+
+                    # Debug the loaded messages if needed
+                    if self.debug:
+                        self.console.print(f"[green]Loaded {len(self.messages)} messages[/green]")
+
+                    loaded = True
+                except Exception as e:
+                    # If we can't load messages with the new format, try legacy format
                     if self.debug:
                         self.console.print(
-                            f"[blue]Loading conversation data with length: {len(conversation_data)}[/blue]"
+                            f"[yellow]Error loading messages with new format: {e}[/yellow]"
                         )
-                    self.conversation = Conversation.model_validate_json(conversation_data)
 
-                # Debug the loaded conversation if needed
-                if self.debug:
-                    self.console.print(
-                        f"[green]Loaded {len(self.conversation.messages)} messages[/green]"
-                    )
-
-                loaded = True
+                    # Check for old conversation.json file
+                    conv_path = latest_session / "conversation.json"
+                    if conv_path.exists():
+                        self.console.print(
+                            "[yellow]Attempting to load legacy format conversation[/yellow]"
+                        )
+                        # We can't load the old format directly, so we'll create an empty messages list
+                        # The user will need to start a new conversation
+                        self.messages = []
+                        loaded = True
 
             # Load session info
             info_path = latest_session / "session.json"
@@ -187,13 +215,11 @@ class Session:
 
             # Save data to new session directory
             self._save_session_info()
-            self._save_conversation()
+            self._save_messages()
             self._save_session_log()
 
             # Print message count
-            self.console.print(
-                f"Loaded {len(self.conversation.messages)} messages from previous session"
-            )
+            self.console.print(f"Loaded {len(self.messages)} messages from previous session")
 
             return True
         except Exception as e:
@@ -206,28 +232,37 @@ class Session:
 
     def _display_conversation_history(self) -> None:
         """Display the conversation history to the user."""
-        if not self.conversation.messages:
+        if not self.messages:
             return
 
         # Get user and assistant messages only (skip system message)
-        messages = [
-            msg
-            for msg in self.conversation.messages
-            if msg.role in (MessageRole.USER, MessageRole.ASSISTANT)
-        ]
+        user_assistant_messages = []
+        for msg in self.messages:
+            if msg.kind == "request" and any(part.part_kind == "user-prompt" for part in msg.parts):
+                # This is a user message
+                for part in msg.parts:
+                    if part.part_kind == "user-prompt":
+                        user_assistant_messages.append(("user", part.content))
+            elif msg.kind == "response":
+                # This is an assistant message
+                text_parts = [part for part in msg.parts if part.part_kind == "text"]
+                if text_parts:
+                    # Join all text parts
+                    content = " ".join(part.content for part in text_parts)
+                    user_assistant_messages.append(("assistant", content))
 
-        if not messages:
+        if not user_assistant_messages:
             return
 
         self.console.print("\n[bold]Previous conversation:[/bold]")
 
         # Display each message in order
-        for msg in messages:
-            if msg.role == MessageRole.USER:
-                self.console.print(f"\n{USER_EMOJI} {msg.content}")
-            elif msg.role == MessageRole.ASSISTANT:
+        for role, content in user_assistant_messages:
+            if role == "user":
+                self.console.print(f"\n{USER_EMOJI} {content}")
+            elif role == "assistant":
                 emoji = self.config.emoji or DEFAULT_BOT_EMOJI
-                self.console.print(f"\n[magenta]{emoji} {msg.content}[/magenta]")
+                self.console.print(f"\n[magenta]{emoji} {content}[/magenta]")
 
         self.console.print("\n[bold]---[/bold]")  # Divider between history and new session
 
@@ -322,11 +357,13 @@ class Session:
         with open(info_path, "w") as f:
             json.dump(self.session_info.model_dump(), f, indent=2, default=str)
 
-    def _save_conversation(self) -> None:
-        """Save conversation to disk."""
-        conv_path = self.session_path / "conversation.json"
-        with open(conv_path, "w") as f:
-            json.dump(self.conversation.model_dump(), f, indent=2, default=str)
+    def _save_messages(self) -> None:
+        """Save messages to disk using Pydantic AI serialization."""
+        messages_path = self.session_path / "messages.json"
+        serialized = ModelMessagesTypeAdapter.dump_json(self.messages)
+        # dump_json returns bytes, so we need to open the file in binary mode
+        with open(messages_path, "wb") as f:
+            f.write(serialized)
 
     def _save_session_log(self) -> None:
         """Save session log to disk."""
@@ -348,86 +385,33 @@ class Session:
         self.session_log.events.append(event)
         self._save_session_log()
 
-    def add_message(self, role: MessageRole, content: str) -> None:
-        """Add a message to the conversation.
+    def add_message(self, role: str, content: str) -> None:
+        """Add a message to the conversation using Pydantic AI's format.
 
         Args:
-            role: The role of the message sender
+            role: The role of the message sender ("user", "assistant", "system")
             content: The message content
         """
-        message = Message(role=role, content=content)
-        self.conversation.messages.append(message)
+        if role == "system":
+            system_part = SystemPromptPart(content=content)
+            message = ModelRequest(parts=[system_part])
+        elif role == "user":
+            user_part = UserPromptPart(content=content)
+            message = ModelRequest(parts=[user_part])
+        elif role == "assistant":
+            text_part = TextPart(content=content)
+            message = ModelResponse(parts=[text_part])
+        else:
+            # Default to user message for unknown roles
+            user_part = UserPromptPart(content=content)
+            message = ModelRequest(parts=[user_part])
+
+        self.messages.append(message)
         self.session_info.num_messages += 1
 
-        self._save_conversation()
+        self._save_messages()
         self._save_session_info()
-        self._log_event("message", {"role": role.value, "length": len(content)})
-
-    async def execute_command(self, command: str) -> CommandResponse:
-        """Execute a shell command.
-
-        Args:
-            command: The command to execute
-
-        Returns:
-            The command execution results
-        """
-        self._log_event("command_execute", {"command": command})
-
-        # Display and log the command being executed
-        self.console.print(f"[light_blue]Executing: {command}[/light_blue]")
-        self.add_message(MessageRole.ASSISTANT, f"Executing: {command}")
-
-        try:
-            # Run the command
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await process.communicate()
-
-            # Get results
-            output = stdout.decode()
-            error = stderr.decode() if process.returncode != 0 else None
-
-            # Log the command output in the conversation
-            if output:
-                self.add_message(MessageRole.ASSISTANT, f"Command output:\n```\n{output}\n```")
-            elif error:
-                self.add_message(MessageRole.ASSISTANT, f"Command error:\n```\n{error}\n```")
-            else:
-                self.add_message(MessageRole.ASSISTANT, "Command executed with no output")
-
-            # Log command execution
-            self.session_info.commands_run += 1
-            self._save_session_info()
-
-            # Create response
-            # Keep actual return code for test compatibility
-            exit_code = 0 if process.returncode == 0 else (process.returncode or 1)
-            response = CommandResponse(
-                command=command,
-                output=output,
-                exit_code=exit_code,
-                error=error,
-            )
-
-            return response
-
-        except Exception as e:
-            # Log error
-            self._log_event("command_error", {"command": command, "error": str(e)})
-
-            # Create error response
-            return CommandResponse(
-                command=command,
-                output="",
-                exit_code=1,
-                error=str(e),
-            )
-
-    # Command validation is now handled exclusively in the execute_command tool
+        self._log_event("message", {"role": role, "length": len(content)})
 
     async def handle_slash_command(self, command: str) -> bool:
         """Handle a slash command from the user.
@@ -504,26 +488,24 @@ class Session:
                         continue
 
                     # Add user message to conversation
-                    self.add_message(MessageRole.USER, user_input)
+                    self.add_message("user", user_input)
 
                     # Generate response
-                    response, token_usage = await self.llm.generate_response(
-                        self.conversation.messages
-                    )
+                    response, token_usage = await self.llm.generate_response(self.messages)
 
                     # Update token usage
                     self.session_info.token_usage.prompt_tokens += token_usage.prompt_tokens
                     self.session_info.token_usage.completion_tokens += token_usage.completion_tokens
                     self.session_info.token_usage.total_tokens += token_usage.total_tokens
 
-                    # No need to process commands - they're already executed during LLM's thinking phase
+                    # No need to process commands - they're already executed during LLM's thinking phase by execute_command_internal
 
                     # Display response with emoji
                     emoji = self.config.emoji or DEFAULT_BOT_EMOJI
                     self.console.print(f"\n[magenta]{emoji} {response.message}[/magenta]")
 
                     # Add assistant message to conversation
-                    self.add_message(MessageRole.ASSISTANT, response.message)
+                    self.add_message("assistant", response.message)
 
                 except KeyboardInterrupt:
                     self.console.print("\nExiting session.")
@@ -551,6 +533,8 @@ class Session:
             self._log_event("session_error", {"error": str(e)})
             raise
 
+    # Command execution is now handled directly by BotLLM.execute_command_internal via the Agent tool
+
     async def handle_one_shot(self, prompt: str) -> None:
         """Handle a one-shot request.
 
@@ -561,25 +545,22 @@ class Session:
 
         try:
             self._refresh_system_prompt()
-            self.add_message(MessageRole.USER, prompt)
-            response, token_usage = await self.llm.generate_response(self.conversation.messages)
+            self.add_message("user", prompt)
+            response, token_usage = await self.llm.generate_response(self.messages)
 
             # Update token usage
             self.session_info.token_usage.prompt_tokens += token_usage.prompt_tokens
             self.session_info.token_usage.completion_tokens += token_usage.completion_tokens
             self.session_info.token_usage.total_tokens += token_usage.total_tokens
 
-            # Process commands - this function is deprecated
-            # The old handle_command_request function has been removed
-            # Command execution is now done in the pydantic-tools execute_command tool
-            for _ in response.commands:
-                pass  # Commands are already executed during the LLM thinking phase
+            # Command execution now happens directly in the BotLLM's execute_command_internal method
+            # via the execute_command tool during thinking
 
             # Print response (to stdout)
             print(response.message)
 
             # Add assistant message to conversation
-            self.add_message(MessageRole.ASSISTANT, response.message)
+            self.add_message("assistant", response.message)
 
             # End session
             self.session_info.end_time = datetime.datetime.now()

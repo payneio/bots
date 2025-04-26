@@ -59,11 +59,7 @@ async def test_command_tool():
         # Print results
         print("\nResponse from bot:")
         print(f"{response.message[:200]}...")
-        print(f"Commands executed: {len(response.commands)}")
-
-        for i, cmd in enumerate(response.commands):
-            print(f"\nCommand {i + 1}: {cmd.command}")
-            print(f"Reason: {cmd.reason}")
+        print("Commands are executed directly via the execute_command tool")
 
         print("\nToken usage:")
         print(f"  Prompt tokens: {token_usage.prompt_tokens}")
@@ -93,11 +89,7 @@ async def test_command_tool():
         # Print results
         print("\nResponse from bot:")
         print(f"{response.message[:200]}...")
-        print(f"Commands executed: {len(response.commands)}")
-
-        for i, cmd in enumerate(response.commands):
-            print(f"\nCommand {i + 1}: {cmd.command}")
-            print(f"Reason: {cmd.reason}")
+        print("Commands are executed directly via the execute_command tool")
 
         print("\nToken usage:")
         print(f"  Prompt tokens: {token_usage.prompt_tokens}")

@@ -10,8 +10,11 @@ from bots.core import find_bot
 
 
 async def start_session(
-    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, 
-    debug: bool = False, continue_session: bool = False
+    bot_name: str,
+    one_shot: bool = False,
+    prompt: Optional[str] = None,
+    debug: bool = False,
+    continue_session: bool = False,
 ) -> None:
     """Start a bot session.
 
@@ -36,7 +39,7 @@ async def start_session(
 
     # Set system prompt path
     config.system_prompt_path = str(bot_path / "system_prompt.md")
-    
+
     # Set current working directory if not already set
     if not config.init_cwd:
         config.init_cwd = os.getcwd()
@@ -47,20 +50,21 @@ async def start_session(
     timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     session_path = bot_path / "sessions" / timestamp
     session_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Get latest session before continuing (exclude current session path)
     latest_session = None
     if continue_session:
         from bots.core import find_latest_session
+
         latest_session = find_latest_session(bot_name, exclude_session=session_path)
 
     # Initialize session
     session = Session(
-        config, 
-        session_path, 
-        debug=debug, 
+        config,
+        session_path,
+        debug=debug,
         continue_session=continue_session,
-        latest_session=latest_session
+        latest_session=latest_session,
     )
 
     # Run session based on mode
@@ -74,8 +78,11 @@ async def start_session(
 
 
 def run_session(
-    bot_name: str, one_shot: bool = False, prompt: Optional[str] = None, 
-    debug: bool = False, continue_session: bool = False
+    bot_name: str,
+    one_shot: bool = False,
+    prompt: Optional[str] = None,
+    debug: bool = False,
+    continue_session: bool = False,
 ) -> None:
     """Run a bot session with asyncio event loop.
 

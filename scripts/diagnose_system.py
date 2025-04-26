@@ -179,7 +179,6 @@ def check_bot_modules():
 
     try:
         print_result("pydantic-ai integration", "Available", True)
-        print_result("StructuredOutputGenerator", "Available")
     except Exception as e:
         print_result("bot.llm.pydantic_tools", "Import failed", False, str(e))
 

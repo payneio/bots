@@ -49,12 +49,6 @@ async def run_simple_bot(debug: bool = False):
         # Print results
         print("\nResponse from bot:")
         print(f"{response.message[:200]}...")
-        print(f"Commands: {len(response.commands)}")
-
-        for i, cmd in enumerate(response.commands):
-            print(f"\nCommand {i + 1}:")
-            print(f"  Command: {cmd.command}")
-            print(f"  Reason: {cmd.reason}")
 
         print("\nToken usage:")
         print(f"  Prompt tokens: {token_usage.prompt_tokens}")

@@ -13,6 +13,7 @@ from bots.core import create_bot, delete_bot, list_bots, rename_bot
 
 console = Console()
 
+
 @click.group()
 @click.pass_context
 def main(ctx: click.Context) -> None:
@@ -58,7 +59,9 @@ def run_bot(name: str, one_shot: bool, debug: bool, continue_session: bool) -> N
         # One-shot mode
         prompt = sys.stdin.read().strip()
         if prompt:
-            run_session(name, one_shot=True, prompt=prompt, debug=debug, continue_session=continue_session)
+            run_session(
+                name, one_shot=True, prompt=prompt, debug=debug, continue_session=continue_session
+            )
         else:
             console.print("[red]Error: No input provided for one-shot mode[/red]")
             sys.exit(1)
@@ -112,9 +115,11 @@ def list() -> None:
                 else:
                     # Use emoji from bot info if available, otherwise default
                     emoji = bot.get("emoji", DEFAULT_BOT_EMOJI)
-                    
+
                     if "description" in bot:
-                        console.print(f"  - {emoji} {bot['name']} - [italic]{bot['description']}[/italic]")
+                        console.print(
+                            f"  - {emoji} {bot['name']} - [italic]{bot['description']}[/italic]"
+                        )
                     else:
                         console.print(f"  - {emoji} {bot['name']}")
 
@@ -126,9 +131,11 @@ def list() -> None:
                 else:
                     # Use emoji from bot info if available, otherwise default
                     emoji = bot.get("emoji", DEFAULT_BOT_EMOJI)
-                    
+
                     if "description" in bot:
-                        console.print(f"  - {emoji} {bot['name']} - [italic]{bot['description']}[/italic]")
+                        console.print(
+                            f"  - {emoji} {bot['name']} - [italic]{bot['description']}[/italic]"
+                        )
                     else:
                         console.print(f"  - {emoji} {bot['name']}")
 
