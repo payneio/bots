@@ -519,3 +519,33 @@ def create_default_system_prompt(path: Union[str, Path]) -> None:
         # This allows the template variables to be updated and immediately reflected
         with open(system_prompt_path, "w") as f:
             f.write(default_prompt)
+
+
+def load_system_prompt(config: BotConfig) -> str:
+    """Load the system prompt from the configuration.
+
+    Args:
+        config: The bot configuration
+
+    Returns:
+        The system prompt
+    """
+    # If we have a path to a system prompt file, read it
+    if hasattr(config, "system_prompt_path") and config.system_prompt_path:
+        path = config.system_prompt_path
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                return f.read()
+
+    # Default system prompt - read from the default_system_prompt.md file
+    default_prompt_path = Path(__file__).parent.parent / "default_system_prompt.md"
+    try:
+        with open(default_prompt_path, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        # Fallback if the file is not found
+        return (
+            "You are a helpful CLI assistant. You can help with various tasks "
+            "and answer questions based on your knowledge. When appropriate, "
+            "you can run shell commands to help the user accomplish tasks."
+        )

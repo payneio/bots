@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 from liquid import Template
 from rich.console import Console
 
-from bots.config import DEFAULT_BOT_EMOJI, USER_EMOJI, BotConfig
+from bots.config import DEFAULT_BOT_EMOJI, USER_EMOJI, BotConfig, load_system_prompt
 from bots.llm.pydantic_bot import BotLLM
 from bots.llm.schemas import CommandResponse
 from bots.models import (
@@ -81,6 +81,38 @@ class Session:
             self._save_session_info()
             self._save_conversation()
             self._save_session_log()
+
+    def _refresh_system_prompt(self) -> None:
+        """Reload and render the system prompt into the conversation messages."""
+        raw = load_system_prompt(self.config)
+        template = Template(raw)
+        now = datetime.datetime.now()
+        formatted_date = now.strftime("%Y-%m-%d")
+        formatted_time = now.strftime("%H:%M:%S")
+        config_dir = self.session_path.parent.parent
+        cwd = self.config.init_cwd or os.getcwd()
+        template_vars = {
+            "bot": {
+                "name": self.config.name or bot_name_from_path(config_dir),
+                "emoji": self.config.emoji or DEFAULT_BOT_EMOJI,
+                "description": self.config.description or "No description available",
+            },
+            "date": formatted_date,
+            "time": formatted_time,
+            "cwd": cwd,
+            "config_dir": str(config_dir),
+        }
+        rendered = template.render(**template_vars)
+        context_info = self._get_context_info()
+        enhanced = f"{rendered}\n\n{context_info}"
+
+        # Replace existing system message or insert it
+        for idx, msg in enumerate(self.conversation.messages):
+            if msg.role == MessageRole.SYSTEM:
+                self.conversation.messages[idx] = Message(MessageRole.SYSTEM, enhanced)
+                break
+        else:
+            self.conversation.messages.insert(0, Message(MessageRole.SYSTEM, enhanced))
 
     def _load_previous_session(self, latest_session: Optional[Path] = None) -> bool:
         """Load data from previous session.
@@ -451,47 +483,15 @@ class Session:
         self.console.print("Type '/help' for available commands.")
 
         # Always display conversation history when continuing a session
-        # The _display_conversation_history method will check if there are user/assistant messages
         self._display_conversation_history()
-
-        # Add system message if not present
-        if not any(m.role == MessageRole.SYSTEM for m in self.conversation.messages):
-            # Get system prompt, render it with template variables, and add context information
-            system_prompt_template = self.llm.system_prompt
-
-            # Create template vars for rendering the system prompt
-            current_time = datetime.datetime.now()
-            formatted_date = current_time.strftime("%Y-%m-%d")
-            formatted_time = current_time.strftime("%H:%M:%S")
-            config_dir = self.session_path.parent.parent
-            cwd = self.config.init_cwd if self.config.init_cwd else os.getcwd()
-
-            template_vars = {
-                "bot": {
-                    "name": self.config.name or bot_name_from_path(config_dir),
-                    "emoji": self.config.emoji or DEFAULT_BOT_EMOJI,
-                    "description": self.config.description or "No description available",
-                },
-                "date": formatted_date,
-                "time": formatted_time,
-                "cwd": cwd,
-                "config_dir": str(config_dir),
-            }
-
-            # Render the system prompt template
-            template = Template(system_prompt_template)
-            rendered_system_prompt = template.render(**template_vars)
-
-            # Add context information
-            context_info = self._get_context_info()
-            enhanced_prompt = f"{rendered_system_prompt}\n\n{context_info}"
-            self.add_message(MessageRole.SYSTEM, enhanced_prompt)
 
         try:
             while True:
                 try:
                     # Get user input - use a simple prompt
                     user_input = input(f"\n{USER_EMOJI} ")
+
+                    self._refresh_system_prompt()
 
                     # Check if it's a slash command
                     if user_input.startswith("/"):
@@ -560,41 +560,8 @@ class Session:
         self._log_event("session_start", {"mode": "one_shot"})
 
         try:
-            # Get system prompt, render it with template variables, and add context information
-            system_prompt_template = self.llm.system_prompt
-
-            # Create template vars for rendering the system prompt
-            current_time = datetime.datetime.now()
-            formatted_date = current_time.strftime("%Y-%m-%d")
-            formatted_time = current_time.strftime("%H:%M:%S")
-            config_dir = self.session_path.parent.parent
-            cwd = self.config.init_cwd if self.config.init_cwd else os.getcwd()
-
-            template_vars = {
-                "bot": {
-                    "name": self.config.name or bot_name_from_path(config_dir),
-                    "emoji": self.config.emoji or DEFAULT_BOT_EMOJI,
-                    "description": self.config.description or "No description available",
-                },
-                "date": formatted_date,
-                "time": formatted_time,
-                "cwd": cwd,
-                "config_dir": str(config_dir),
-            }
-
-            # Render the system prompt template
-            template = Template(system_prompt_template)
-            rendered_system_prompt = template.render(**template_vars)
-
-            # Add context information
-            context_info = self._get_context_info()
-            enhanced_prompt = f"{rendered_system_prompt}\n\n{context_info}"
-            self.add_message(MessageRole.SYSTEM, enhanced_prompt)
-
-            # Add user message
+            self._refresh_system_prompt()
             self.add_message(MessageRole.USER, prompt)
-
-            # Generate response
             response, token_usage = await self.llm.generate_response(self.conversation.messages)
 
             # Update token usage

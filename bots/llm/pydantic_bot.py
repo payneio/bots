@@ -1,11 +1,9 @@
 """LLM integration using pydantic-ai for structured output generation."""
 
-import os
 import sys
-from pathlib import Path
 from typing import List, Optional, Tuple
 
-from bots.config import BotConfig
+from bots.config import BotConfig, load_system_prompt
 from bots.llm.pydantic_tools import BotResponse as PydanticBotResponse
 from bots.llm.pydantic_tools import StructuredOutputGenerator
 from bots.llm.schemas import BotResponse, CommandAction
@@ -34,7 +32,7 @@ class BotLLM:
             raise ValueError(f"API key not found for provider: {config.model_provider}")
 
         # Load system prompt
-        self.system_prompt = self._load_system_prompt(config)
+        self.system_prompt = load_system_prompt(config)
 
         # Print API key debug info only if debug is enabled
         if self.debug:
@@ -54,35 +52,6 @@ class BotLLM:
             )
         except Exception as e:
             raise ValueError(f"Failed to initialize pydantic-ai: {e}") from e
-
-    def _load_system_prompt(self, config: BotConfig) -> str:
-        """Load the system prompt from the configuration.
-
-        Args:
-            config: The bot configuration
-
-        Returns:
-            The system prompt
-        """
-        # If we have a path to a system prompt file, read it
-        if hasattr(config, "system_prompt_path") and config.system_prompt_path:
-            path = config.system_prompt_path
-            if os.path.exists(path):
-                with open(path, "r") as f:
-                    return f.read()
-
-        # Default system prompt - read from the default_system_prompt.md file
-        default_prompt_path = Path(__file__).parent.parent / "default_system_prompt.md"
-        try:
-            with open(default_prompt_path, "r") as f:
-                return f.read()
-        except FileNotFoundError:
-            # Fallback if the file is not found
-            return (
-                "You are a helpful CLI assistant. You can help with various tasks "
-                "and answer questions based on your knowledge. When appropriate, "
-                "you can run shell commands to help the user accomplish tasks."
-            )
 
     def _get_role_name(self, role: MessageRole) -> str:
         """Get the role name as a string.
@@ -124,27 +93,7 @@ class BotLLM:
         prompt = f"""
 {conversation_history}
 
-Please respond to the user in a helpful and conversational way.
-
-You are a CLI assistant that can suggest and execute commands to help the user.
-You have access to an execute_command tool that allows you to run shell commands.
-
-Command permissions:
-1. Commands in the 'allow' list can be executed immediately
-2. Commands in the 'deny' list will be rejected
-3. Other commands will prompt the user for approval before execution
-
-When you need to run a command to help the user:
-1. Always use the execute_command tool DURING your thinking process
-2. The system will automatically prompt for user approval if needed
-3. If approved, you'll receive the command output to include in your response
-4. If denied, you'll receive an error message to inform your response
-5. Include the commands you ran and their outputs in your response text
-
-YOUR RESPONSE SHOULD:
-1. Explain what commands you ran and why
-2. Include the command outputs in your text, formatted for readability
-3. Provide any necessary explanations of the outputs
+Please respond.
 
 YOUR RESPONSE MUST BE IN THIS JSON FORMAT:
 {{
@@ -175,18 +124,6 @@ IMPORTANT: This is for a pydantic schema with:
         Raises:
             ValueError: If the response generation fails
         """
-        # Reload the system prompt to get any changes made by the user
-        if hasattr(self.config, "system_prompt_path") and self.config.system_prompt_path:
-            path = self.config.system_prompt_path
-            if os.path.exists(path):
-                try:
-                    with open(path, "r") as f:
-                        self.system_prompt = f.read()
-                        if self.debug:
-                            print(f"Reloaded system prompt from {path}", file=sys.stderr)
-                except Exception as e:
-                    if self.debug:
-                        print(f"Error reloading system prompt: {e}", file=sys.stderr)
 
         # Create a prompt from the messages
         prompt = self._messages_to_prompt(messages)
