@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["bots", "bots.llm", "bots.providers"]
+packages = ["bots", "bots.llm"]
 include-package-data = true
 
 [dependency-groups]
@@ -60,23 +60,22 @@ exclude = ["**/__pycache__"]
 
 # Basic configuration
 reportMissingImports = true
-reportMissingTypeStubs = false 
+reportMissingTypeStubs = false
 
 # Special exemptions
-reportIncompatibleMethodOverride = "none"  # For AsyncIterator in providers
-reportUnusedFunction = "none"  # For decorator-created functions
+reportUnusedFunction = "none" # For decorator-created functions
 
 # These are specific to the OpenAI API
-reportUnknownMemberType = "none"  # For OpenAI API's dynamic types
-reportUnknownVariableType = "none"  # For OpenAI API's dynamic types
-reportArgumentType = "none"  # For OpenAI API's complicated types
-reportCallIssue = "none"  # For OpenAI API calls
+reportUnknownMemberType = "none"   # For OpenAI API's dynamic types
+reportUnknownVariableType = "none" # For OpenAI API's dynamic types
+reportArgumentType = "none"        # For OpenAI API's complicated types
+reportCallIssue = "none"           # For OpenAI API calls
 
 # Type checking mode
-typeCheckingMode = "basic"  # Use "basic" instead of "strict" for this codebase
+typeCheckingMode = "basic" # Use "basic" instead of "strict" for this codebase
 
 # Enable these useful checks
-reportPrivateUsage = "error" 
+reportPrivateUsage = "error"
 reportUnnecessaryIsInstance = "error"
 reportUnnecessaryComparison = "error"
 reportUnnecessaryCast = "error"

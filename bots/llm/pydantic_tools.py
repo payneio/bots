@@ -111,35 +111,27 @@ class StructuredOutputGenerator:
         if output_type.__name__ == "BotResponse":
             # Add instructions about the execute_command tool and permission system
             tool_instructions = """
-You can execute commands using the execute_command tool when needed.
-
-Command permissions:
-1. Commands in the 'allow' list can be executed immediately
-2. Commands in the 'deny' list will be rejected
-3. Other commands require user approval - you should suggest them in your response
-
-Commands you execute should be added to the 'commands' array in your final response.
-If a command requires user approval, explain this in your response.
+You can execute commands using the execute_command tool when needed. Any linux command will be executed on the host system.
 """
             # Add specific JSON format instructions
-            prompt = f"{prompt}\n\n{tool_instructions}\n\nYour response MUST be in valid JSON format with 'reply' and 'commands' fields."
-            if self.debug:
-                print("Adding tool and JSON formatting instructions", file=sys.stderr)
+            prompt = f"{prompt}\n\n{tool_instructions}\n\nYour response MUST be in valid JSON format with 'reply' field."
 
         # Create an agent with the specific output_type for this request
         model_string = f"openai:{self.model_name}"
-        
+
         # Explicitly create agent with only the arguments it accepts
         agent = Agent(
             model=model_string,
             output_type=output_type,
             temperature=self.temperature,
-            instrument=self.debug  # type: ignore # This is actually valid, but pyright doesn't know about it
+            instrument=self.debug,  # type: ignore # This is actually valid, but pyright doesn't know about it
         )
 
         # Add the command execution tool
         @agent.tool
-        async def execute_command(ctx: RunContext, command: str) -> Dict[str, Any]:  # pragma: no cover
+        async def execute_command(
+            ctx: RunContext, command: str
+        ) -> Dict[str, Any]:  # pragma: no cover
             """Execute a shell command.
 
             Args:
@@ -274,56 +266,6 @@ If a command requires user approval, explain this in your response.
             raise ValueError("Agent returned None result")
 
         # No need to add commands to the response anymore - the LLM includes them in the text
-
-        if self.debug:
-            print(f"Agent response generated successfully: {type(result.output)}", file=sys.stderr)
-        return result.output
-
-    def generate_sync(self, prompt: str, output_type: Type[T]) -> Any:
-        """Generate a structured output from a prompt synchronously.
-
-        Args:
-            prompt: The prompt to send to the LLM
-            output_type: The type of the output to generate
-
-        Returns:
-            An instance of the output type
-
-        Raises:
-            Exception: If the LLM request fails
-        """
-        # Note: The synchronous version does not support command tools
-        # This is because the command execution is async. Use the async generate method
-        # instead if you need command tool support.
-
-        if self.debug:
-            print("Warning: generate_sync does not support command tools", file=sys.stderr)
-
-        # Special treatment for BotResponse to make sure the format is clear
-        if output_type.__name__ == "BotResponse":
-            # Add specific JSON format instructions
-            prompt = f"{prompt}\n\nYour response MUST be in valid JSON format with 'reply' and 'commands' fields."
-
-        # Create an agent with the specific output_type for this request
-        model_string = f"openai:{self.model_name}"
-        
-        # Explicitly create agent with only the arguments it accepts
-        agent = Agent(
-            model=model_string,
-            output_type=output_type,
-            temperature=self.temperature,
-            instrument=self.debug  # type: ignore # This is actually valid, but pyright doesn't know about it
-        )
-
-        # Run the agent synchronously
-        result = agent.run_sync(prompt)
-
-        # Type cast to avoid unnecessary comparison warnings
-        # We know this can actually be None, despite what the type checker thinks
-        if result.output is None:  # type: ignore
-            if self.debug:
-                print(f"Agent result had no output. Raw result: {result}", file=sys.stderr)
-            raise ValueError("Agent returned None result")
 
         if self.debug:
             print(f"Agent response generated successfully: {type(result.output)}", file=sys.stderr)
