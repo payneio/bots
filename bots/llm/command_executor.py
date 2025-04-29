@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from bots.llm.schemas import CommandAction, CommandResponse
-from bots.utils import validate_command
+from bots.permissions import CommandPermissions
 
 console = Console()
 
@@ -53,12 +53,7 @@ class CommandExecutor:
             print(f"Command requested: {command}", file=sys.stderr)
 
         # Validate command using the CommandPermissions class
-        action = validate_command(
-            command=command,
-            allow_list=self.command_permissions.allow,
-            deny_list=self.command_permissions.deny,
-            ask_if_unspecified=self.command_permissions.ask_if_unspecified,
-        )
+        action = self.command_permissions.validate_command(command)
 
         # Handle the validation result
         if action == CommandAction.DENY:

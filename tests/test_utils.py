@@ -1,6 +1,6 @@
 """Tests for utils module."""
 
-from bots.config import CommandPermissions
+from bots.permissions import CommandPermissions
 from bots.llm.schemas import CommandAction
 from bots.utils import _is_in_quotes, normalize_command, split_command, validate_command
 

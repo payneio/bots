@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from bots.config import CommandPermissions
+from bots.permissions import CommandPermissions
 
 
 def main():

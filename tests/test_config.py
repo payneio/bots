@@ -5,7 +5,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from bots.config import BotConfig, CommandPermissions
+from bots.config import BotConfig
+from bots.permissions import CommandPermissions
 
 
 def test_command_permissions_defaults():

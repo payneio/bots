@@ -211,6 +211,10 @@ def validate_command(
 ) -> CommandAction:
     """Validate a command against permission lists.
 
+    Note:
+        This function is maintained for backward compatibility.
+        New code should use the CommandPermissions class from bots.permissions.
+
     Args:
         command: The command to validate
         allow_list: List of allowed command prefixes
@@ -220,25 +224,14 @@ def validate_command(
     Returns:
         The action to take for this command
     """
-    # Extract the base command (first word before any spaces or special chars)
-    try:
-        parsed = shlex.split(command)
-        base_command = parsed[0] if parsed else ""
-    except Exception:
-        # If we can't parse it, just get the first word
-        base_command = command.split()[0] if command else ""
-
-    # Check if command is explicitly allowed
-    if base_command in allow_list:
-        return CommandAction.EXECUTE
-
-    # Check if command is explicitly denied
-    if base_command in deny_list:
-        return CommandAction.DENY
-
-    # Check if we should ask for unspecified commands
-    if ask_if_unspecified:
-        return CommandAction.ASK
-
-    # Default to deny
-    return CommandAction.DENY
+    from bots.permissions import CommandPermissions
+    
+    # Create a temporary CommandPermissions object
+    permissions = CommandPermissions(
+        allow=allow_list, 
+        deny=deny_list, 
+        ask_if_unspecified=ask_if_unspecified
+    )
+    
+    # Delegate to the class implementation
+    return permissions.validate_command(command)
