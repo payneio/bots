@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from pydantic_ai.messages import (
+    ModelMessage,
     ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
@@ -17,9 +18,9 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from bots.bot import BotResponse
+from bots.command.permissions import Permission
 from bots.config import BotConfig
-from bots.llm.pydantic_bot import Message
-from bots.llm.schemas import BotResponse, CommandAction
 from bots.models import SessionStatus, TokenUsage
 from bots.session import Session
 
@@ -49,7 +50,7 @@ def bot_config():
 
 
 @pytest.fixture
-def pydantic_messages() -> List[Message]:
+def pydantic_messages() -> List[ModelMessage]:
     """Create a sample set of Pydantic AI messages for testing."""
     messages = []
 
@@ -68,9 +69,9 @@ def pydantic_messages() -> List[Message]:
     return messages
 
 
-# Mock BotLLM for testing - uses Pydantic AI message format
-class MockBotLLM:
-    """Mock BotLLM for testing."""
+# Mock Bot for testing - uses Pydantic AI message format
+class MockBot:
+    """Mock Bot for testing."""
 
     def __init__(self, config, debug=False):
         self.config = config
@@ -86,17 +87,17 @@ class MockBotLLM:
             total_tokens=30,
         )
 
-    def create_system_message(self, content: str) -> Message:
+    def create_system_message(self, content: str) -> ModelMessage:
         """Create a system message for testing."""
         system_part = SystemPromptPart(content=content)
         return ModelRequest(parts=[system_part])
 
-    def create_user_message(self, content: str) -> Message:
+    def create_user_message(self, content: str) -> ModelMessage:
         """Create a user message for testing."""
         user_part = UserPromptPart(content=content)
         return ModelRequest(parts=[user_part])
 
-    def create_assistant_message(self, content: str) -> Message:
+    def create_assistant_message(self, content: str) -> ModelMessage:
         """Create an assistant message for testing."""
         text_part = TextPart(content=content)
         return ModelResponse(parts=[text_part])
@@ -106,11 +107,11 @@ class MockBotLLM:
 
     def validate_command(self, command):
         if command.startswith("ls") or command.startswith("echo"):
-            return CommandAction.EXECUTE
+            return Permission.APPROVE
         elif command.startswith("rm") or command.startswith("shutdown"):
-            return CommandAction.DENY
+            return Permission.DENY
         else:
-            return CommandAction.ASK
+            return Permission.ASK
 
     async def execute_command_internal(self, command):
         """Mock execution of a command."""
@@ -140,8 +141,8 @@ class MockBotLLM:
 @pytest.mark.asyncio
 async def test_session_init(temp_session_dir, bot_config):
     """Test session initialization."""
-    # Mock the BotLLM class to avoid pydantic-ai dependency
-    with patch("bots.session.BotLLM", MockBotLLM):
+    # Mock the Bot class to avoid pydantic-ai dependency
+    with patch("bots.bot.Bot", MockBot):
         # Create session
         session = Session(bot_config, temp_session_dir)
 
@@ -195,7 +196,7 @@ async def test_continue_session(temp_session_dir, bot_config, pydantic_messages)
         mock_find_latest.return_value = prev_session_dir
 
         # Create a new session with continue_session flag
-        with patch("bots.session.BotLLM", MockBotLLM):
+        with patch("bots.bot.Bot", MockBot):
             session = Session(bot_config, temp_session_dir, continue_session=True)
 
             # Check that previous messages were loaded
@@ -234,7 +235,7 @@ async def test_continue_session(temp_session_dir, bot_config, pydantic_messages)
 @pytest.mark.asyncio
 async def test_add_message(temp_session_dir, bot_config):
     """Test adding messages to the session with Pydantic AI format."""
-    with patch("bots.session.BotLLM", MockBotLLM):
+    with patch("bots.bot.Bot", MockBot):
         session = Session(bot_config, temp_session_dir)
 
         # Add user message
@@ -275,7 +276,7 @@ async def test_add_message(temp_session_dir, bot_config):
         assert session.session_info.num_messages == 3
 
 
-# Command execution is now handled directly via the BotLLM's execute_command_internal method
+# Command execution is now handled directly via the Bot's execute_command_internal method
 # through the execute_command tool, not through a separate method on the Session class
 
 
@@ -286,7 +287,7 @@ async def test_add_message(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_interactive_session_start(temp_session_dir, bot_config):
     """Test the start of an interactive session."""
-    with patch("bots.session.BotLLM", MockBotLLM):
+    with patch("bots.bot.Bot", MockBot):
         session = Session(bot_config, temp_session_dir)
 
         # Mock the console.print method to avoid output during test
@@ -312,7 +313,7 @@ async def test_interactive_session_start(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_handle_slash_command(temp_session_dir, bot_config):
     """Test handling slash commands."""
-    with patch("bots.session.BotLLM", MockBotLLM):
+    with patch("bots.bot.Bot", MockBot):
         session = Session(bot_config, temp_session_dir)
 
         # Test /help command
@@ -349,9 +350,9 @@ async def test_handle_slash_command(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_get_context_info(temp_session_dir, bot_config):
     """Test the _get_context_info function."""
-    with patch("bots.session.BotLLM", MockBotLLM):
+    with patch("bots.bot.Bot", MockBot):
         session = Session(bot_config, temp_session_dir)
-        context_info = session._get_context_info()
+        context_info = session._get_context_info()  # type: ignore
 
         # Check that context includes all expected sections
         assert "Environment Information" in context_info
@@ -372,13 +373,13 @@ async def test_get_context_info(temp_session_dir, bot_config):
 async def test_message_serialization(temp_session_dir, bot_config, pydantic_messages):
     """Test serializing and deserializing Pydantic AI messages."""
     # Create a session with the mock messages
-    with patch("bots.session.BotLLM", MockBotLLM):
+    with patch("bots.bot.Bot", MockBot):
         session = Session(bot_config, temp_session_dir)
         # Set messages directly
         session.messages = pydantic_messages.copy()
 
         # Save messages
-        session._save_messages()
+        session._save_messages()  # type: ignore
 
         # Check that the messages file was created
         messages_path = temp_session_dir / "messages.json"
@@ -408,37 +409,69 @@ async def test_message_serialization(temp_session_dir, bot_config, pydantic_mess
 @pytest.mark.asyncio
 async def test_one_shot_session(temp_session_dir, bot_config):
     """Test one-shot session mode."""
-    with patch("bots.session.BotLLM", MockBotLLM):
+    # Create specific mock response and token usage
+    test_response = BotResponse(message="This is a test response.")
+    test_token_usage = TokenUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30)
+
+    # Use patch.object to mock Bot.generate_response
+    async def mock_generate_response(*args, **kwargs):
+        return test_response, test_token_usage
+
+    # First initialize the session with the real MockBot
+    with patch("bots.bot.Bot", MockBot):
         session = Session(bot_config, temp_session_dir)
 
-        # Set up mocks for print function
-        with patch("builtins.print") as mock_print:
-            await session.handle_one_shot("Hello, bot!")
+        # Then patch the generate_response method on the instance
+        with patch.object(session.bot, "generate_response", mock_generate_response):
+            # Set up mocks for print function to verify output
+            with patch("builtins.print") as mock_print:
+                await session.handle_one_shot("Hello, bot!")
 
-        # Check if messages were added (system + user + assistant)
-        assert len(session.messages) == 3
+            # Check if messages were added properly (system + user + assistant)
+            assert len(session.messages) == 3
 
-        # Check system message
-        system_msg = session.messages[0]
-        assert system_msg.kind == "request"
-        system_parts = [part for part in system_msg.parts if part.part_kind == "system-prompt"]
-        assert len(system_parts) > 0
-        # Only check for Environment Information since exact content may vary
-        assert "Environment Information" in system_parts[0].content
+            # Verify the system message was properly refreshed
+            system_msg = session.messages[0]
+            assert system_msg.kind == "request"
+            # Find the system-prompt part
+            system_parts = [part for part in system_msg.parts if part.part_kind == "system-prompt"]
+            assert len(system_parts) > 0
+            # Check for environment information which should be included in the system prompt
+            assert "Environment Information" in system_parts[0].content
 
-        # Check user message
-        user_msg = session.messages[1]
-        assert user_msg.kind == "request"
-        user_parts = [part for part in user_msg.parts if part.part_kind == "user-prompt"]
-        assert len(user_parts) > 0
-        assert user_parts[0].content == "Hello, bot!"
+            # Verify the user message was added correctly
+            user_msg = session.messages[1]
+            assert user_msg.kind == "request"
+            # Find the user-prompt part
+            user_parts = [part for part in user_msg.parts if part.part_kind == "user-prompt"]
+            assert len(user_parts) > 0
+            # Check the content matches what was sent
+            assert user_parts[0].content == "Hello, bot!"
 
-        # Check assistant message
-        assistant_msg = session.messages[2]
-        assert assistant_msg.kind == "response"
+            # Verify the assistant message was added correctly
+            assistant_msg = session.messages[2]
+            assert assistant_msg.kind == "response"
+            # Find the text part in the assistant response
+            text_parts = [part for part in assistant_msg.parts if part.part_kind == "text"]
+            assert len(text_parts) > 0
+            # Verify the response content matches our mock
+            assert text_parts[0].content == "This is a test response."
 
-        # Check if response was printed
-        mock_print.assert_any_call("This is a test response.")
+            # Verify the response was printed to stdout
+            mock_print.assert_called_once_with("This is a test response.")
 
-        # Check session state
-        assert session.session_info.end_time is not None
+            # Verify session was properly completed
+            assert session.session_info.end_time is not None
+            assert session.session_info.status == SessionStatus.COMPLETED
+
+            # Verify token usage was updated
+            assert session.session_info.token_usage.prompt_tokens == 10
+            assert session.session_info.token_usage.completion_tokens == 20
+            assert session.session_info.token_usage.total_tokens == 30
+
+            # Verify session event was logged
+            assert any(event.event_type == "session_end" for event in session.session_log.events)
+            assert any(
+                event.event_type == "session_start" and event.details.get("mode") == "one_shot"
+                for event in session.session_log.events
+            )

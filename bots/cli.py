@@ -7,9 +7,8 @@ import click
 import pydantic_ai
 from rich.console import Console
 
-from bots.async_core import run_session
 from bots.config import DEFAULT_BOT_EMOJI
-from bots.core import create_bot, delete_bot, list_bots, rename_bot
+from bots.core import create_bot, delete_bot, list_bots, rename_bot, run_session
 
 console = Console()
 
@@ -35,8 +34,8 @@ def main(ctx: click.Context) -> None:
 def run_bot(name: str, one_shot: bool, debug: bool, continue_session: bool) -> None:
     """Start a session with a bot.
 
-    Starts an interactive session with the specified bot. If --one-shot is specified,
-    reads from stdin for the prompt. If --continue is specified, loads the previous
+    Starts a session with the specified bot. If --one-shot is specified, reads
+    from stdin for the prompt. If --continue is specified, loads the previous
     session history.
     """
     if debug:

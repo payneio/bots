@@ -2,21 +2,30 @@
 
 import asyncio
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.prompt import Confirm
 
-from bots.llm.schemas import CommandAction, CommandResponse
-from bots.permissions import CommandPermissions
+from .permissions import CommandPermissions, Permission
 
 console = Console()
+
+
+class CommandResponse(BaseModel):
+    """A response to a command execution."""
+
+    command: str = Field(..., description="The command that was executed")
+    output: str = Field(..., description="The output of the command")
+    exit_code: int = Field(..., description="The exit code of the command")
+    error: Optional[str] = Field(None, description="Error message if the command failed")
 
 
 class CommandExecutor:
     """Handles command execution with permissions checking."""
 
-    def __init__(self, command_permissions, debug=False):
+    def __init__(self, command_permissions: CommandPermissions, debug=False):
         """Initialize the command executor.
 
         Args:
@@ -34,8 +43,8 @@ class CommandExecutor:
 
         Returns:
             A dictionary with the command execution results
-            
-        Note: 
+
+        Note:
             This returns a dictionary for compatibility with the tool interface.
             For structured access, use get_command_response() which returns CommandResponse.
         """
@@ -52,11 +61,10 @@ class CommandExecutor:
         if self.debug:
             print(f"Command requested: {command}", file=sys.stderr)
 
-        # Validate command using the CommandPermissions class
-        action = self.command_permissions.validate_command(command)
+        action = self.command_permissions.permit_command(command)
 
         # Handle the validation result
-        if action == CommandAction.DENY:
+        if action == Permission.DENY:
             # DENY: Command is explicitly denied
             if self.debug:
                 print(f"Command '{command}' is denied by bot permissions", file=sys.stderr)
@@ -68,12 +76,12 @@ class CommandExecutor:
                 "status": "denied",
                 "command": command,
             }
-        elif action == CommandAction.EXECUTE:
+        elif action == Permission.APPROVE:
             # EXECUTE: Command is explicitly allowed - continue to execution below
             if self.debug:
                 print(f"Command '{command}' is allowed by bot permissions", file=sys.stderr)
             # We'll proceed to execute this command after this validation block
-        elif action == CommandAction.ASK:
+        elif action == Permission.ASK:
             # ASK: Command requires user approval - ask immediately
             if self.debug:
                 print(f"Command '{command}' requires user approval", file=sys.stderr)
@@ -156,13 +164,13 @@ class CommandExecutor:
                 "exit_code": 1,
                 "command": command,
             }
-            
+
     def get_command_response(self, result: Dict[str, Any]) -> CommandResponse:
         """Convert a command execution result dictionary to a CommandResponse object.
-        
+
         Args:
             result: Dictionary returned from execute_command
-            
+
         Returns:
             A structured CommandResponse object
         """
@@ -170,5 +178,5 @@ class CommandExecutor:
             command=result.get("command", "unknown"),
             output=result.get("output", ""),
             exit_code=result.get("exit_code", 1),
-            error=result.get("error")
+            error=result.get("error"),
         )

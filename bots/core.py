@@ -1,7 +1,7 @@
 """Core functionality for bot."""
 
+import asyncio
 import datetime
-import json
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -207,8 +207,24 @@ def delete_bot(bot_name: str) -> Path:
     return bot_path
 
 
-def start_session(bot_name: str, one_shot: bool = False, prompt: Optional[str] = None) -> None:
-    """Start a bot session."""
+async def start_session(
+    bot_name: str,
+    one_shot: bool = False,
+    prompt: Optional[str] = None,
+    debug: bool = False,
+    continue_session: bool = False,
+) -> None:
+    """Start a bot session.
+
+    Args:
+        bot_name: The name of the bot to start
+        one_shot: Whether to run in one-shot mode
+        prompt: The user's prompt for one-shot mode
+        debug: Whether to print debug information
+        continue_session: Whether to continue from previous session
+    """
+    from bots.session import Session
+
     bot_path = find_bot(bot_name)
     if not bot_path:
         raise FileNotFoundError(f"Bot '{bot_name}' not found")
@@ -219,51 +235,62 @@ def start_session(bot_name: str, one_shot: bool = False, prompt: Optional[str] =
     except Exception as e:
         raise RuntimeError(f"Failed to load bot configuration: {e}")
 
-    # Load system prompt
-    system_prompt_path = bot_path / "system_prompt.md"
-    if system_prompt_path.exists():
-        with open(system_prompt_path, "r") as f:
-            _ = f.read()  # System prompt will be used in future implementation
-    else:
-        _ = "You are a helpful AI assistant."  # Default prompt for future use
+    # Set system prompt path
+    config.system_prompt_path = str(bot_path / "system_prompt.md")
 
-    # Create session directory if not one-shot mode
-    if not one_shot:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-        session_path = bot_path / "sessions" / timestamp
-        session_path.mkdir(parents=True, exist_ok=True)
+    # Set current working directory if not already set
+    if not config.init_cwd:
+        config.init_cwd = os.getcwd()
+        # Save this value for future sessions
+        config.save(bot_path)
 
-        # Initialize session files
-        session_info = {
-            "start_time": timestamp,
-            "model": config.model_name,
-            "provider": config.model_provider,
-            "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-            "num_messages": 0,
-            "commands_run": 0,
-            "status": "active",
-        }
+    # Create session directory (we need this path to exclude it from find_latest_session)
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    session_path = bot_path / "sessions" / timestamp
+    session_path.mkdir(parents=True, exist_ok=True)
 
-        with open(session_path / "session.json", "w") as f:
-            json.dump(session_info, f, indent=2)
+    # Get latest session before continuing (exclude current session path)
+    latest_session = None
+    if continue_session:
+        from bots.core import find_latest_session
 
-        with open(session_path / "conversation.json", "w") as f:
-            json.dump([], f, indent=2)
+        latest_session = find_latest_session(bot_name, exclude_session=session_path)
 
-        with open(session_path / "log.json", "w") as f:
-            json.dump([], f, indent=2)
+    # Initialize session
+    session = Session(
+        config,
+        session_path,
+        debug=debug,
+        continue_session=continue_session,
+        latest_session=latest_session,
+    )
 
-    # TODO: Implement actual session with AI provider
+    # Run session based on mode
     if one_shot:
-        # One-shot mode implementation
-        print(f"Bot '{bot_name}' responding to: {prompt}")
-        print("This is a placeholder for the actual AI response.")
+        if prompt:
+            await session.handle_one_shot(prompt)
+        else:
+            raise ValueError("Prompt is required for one-shot mode")
     else:
-        # Interactive mode implementation
-        print(f"Starting interactive session with bot '{bot_name}'")
-        print("Type '/exit' to end the session.")
-        print("Type '/help' for available commands.")
-        print("\nBot is ready for your input! (Interactive mode not fully implemented yet)")
+        await session.start_interactive()
 
-        print("\nThis is the old placeholder implementation.")
-        print("Please use `bot run --name <name>` instead for the new implementation.")
+
+def run_session(
+    bot_name: str,
+    one_shot: bool = False,
+    prompt: Optional[str] = None,
+    debug: bool = False,
+    continue_session: bool = False,
+) -> None:
+    """Run a bot session with asyncio event loop.
+
+    This is a synchronous wrapper around start_session for use in the CLI.
+
+    Args:
+        bot_name: The name of the bot to start
+        one_shot: Whether to run in one-shot mode
+        prompt: The user's prompt for one-shot mode
+        debug: Whether to print debug information
+        continue_session: Whether to continue from previous session
+    """
+    asyncio.run(start_session(bot_name, one_shot, prompt, debug, continue_session))

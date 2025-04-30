@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from liquid import Template
 from pydantic_ai.messages import (
+    ModelMessage,
     ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
@@ -20,8 +21,8 @@ from pydantic_ai.messages import (
 )
 from rich.console import Console
 
+from bots.bot import Bot
 from bots.config import DEFAULT_BOT_EMOJI, USER_EMOJI, BotConfig, load_system_prompt
-from bots.llm.pydantic_bot import BotLLM, Message
 from bots.models import (
     SessionEvent,
     SessionInfo,
@@ -65,7 +66,7 @@ class Session:
         self.config = config
         self.session_path = session_path
         self.debug = debug
-        self.llm = BotLLM(config, debug=debug)
+        self.bot = Bot(config, debug=debug)
         self.console = Console()
 
         # Session directory should already exist (created in async_core.py)
@@ -79,7 +80,7 @@ class Session:
                 provider=config.model_provider,
             )
             # Initialize empty messages list instead of Conversation
-            self.messages: List[Message] = []
+            self.messages: List[ModelMessage] = []
             self.session_log = SessionLog()
 
             # Save initial session info
@@ -491,7 +492,7 @@ class Session:
                     self.add_message("user", user_input)
 
                     # Generate response
-                    response, token_usage = await self.llm.generate_response(self.messages)
+                    response, token_usage = await self.bot.generate_response(self.messages)
 
                     # Update token usage
                     self.session_info.token_usage.prompt_tokens += token_usage.prompt_tokens
@@ -533,8 +534,6 @@ class Session:
             self._log_event("session_error", {"error": str(e)})
             raise
 
-    # Command execution is now handled directly by BotLLM.execute_command_internal via the Agent tool
-
     async def handle_one_shot(self, prompt: str) -> None:
         """Handle a one-shot request.
 
@@ -546,15 +545,12 @@ class Session:
         try:
             self._refresh_system_prompt()
             self.add_message("user", prompt)
-            response, token_usage = await self.llm.generate_response(self.messages)
+            response, token_usage = await self.bot.generate_response(self.messages)
 
             # Update token usage
             self.session_info.token_usage.prompt_tokens += token_usage.prompt_tokens
             self.session_info.token_usage.completion_tokens += token_usage.completion_tokens
             self.session_info.token_usage.total_tokens += token_usage.total_tokens
-
-            # Command execution now happens directly in the BotLLM's execute_command_internal method
-            # via the execute_command tool during thinking
 
             # Print response (to stdout)
             print(response.message)

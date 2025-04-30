@@ -26,14 +26,17 @@ Command permissions are configured in the `config.json` file for each bot. Here'
 
 ### Pattern Format
 
-Command permissions support two formats:
+Command permissions support three formats:
 
 1. **Simple command**: Just the command name with no arguments (e.g., `"ls"`)
-2. **Pattern matching**: `"command:argument_pattern"` using glob-style pattern matching
+2. **Glob patterns**: `"command:argument_pattern"` using glob-style pattern matching
+3. **Regex patterns**: Enclosed in slashes, like `"/regex/"`
 
 ### Pattern Matching
 
-For more fine-grained control, you can use pattern matching:
+#### Glob Patterns
+
+For basic pattern matching, you can use glob patterns:
 
 - `"cat:*.txt"` - Allow `cat` only for `.txt` files
 - `"git:status"` - Allow only the `git status` command
@@ -43,6 +46,30 @@ For more fine-grained control, you can use pattern matching:
 Glob patterns use the standard wildcard characters:
 - `*` - Matches any number of characters
 - `?` - Matches a single character
+
+#### Regex Patterns
+
+For more advanced matching, you can use regular expressions enclosed in slashes:
+
+- `"/^kubectl|oc$/"` - Match either "kubectl" or "oc" commands
+- `"kubectl:/^get|describe$/"` - Match kubectl commands with subcommands "get" or "describe"
+- `"/^docker.*/:run"` - Match any docker command that starts with "docker" followed by anything, with subcommand "run"
+
+Regular expressions provide much more powerful matching capabilities when you need more control than simple glob patterns.
+
+## Subcommand Matching
+
+The permission system has special handling for subcommands (like `kubectl get`, `git commit`, etc.). When specifying a pattern like `"kubectl:get"`, it matches any command that:
+
+1. Starts with `kubectl` as the command
+2. Has `get` as the first argument (subcommand)
+3. May have any number of additional arguments
+
+This means:
+- `"kubectl:get"` matches `kubectl get pods`, `kubectl get nodes -o wide`, etc.
+- `"kubectl:get pods"` matches `kubectl get pods`, `kubectl get pods -n kube-system`, etc.
+
+This makes it much easier to work with commands that have a subcommand structure.
 
 ## Examples
 
@@ -56,7 +83,9 @@ Glob patterns use the standard wildcard characters:
   "git:status",          // Allow git status command
   "git:log",             // Allow git log command
   "find:* -name *.py",   // Allow find commands for Python files
-  "grep:pattern *"       // Allow grep for specific pattern
+  "grep:pattern *",      // Allow grep for specific pattern
+  "/kube.*/:get",        // Allow any command matching "kube..." with subcommand "get"
+  "kubectl:/desc.*/",    // Allow kubectl with subcommands matching regex "desc..."
 ]
 ```
 

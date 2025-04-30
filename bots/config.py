@@ -7,13 +7,11 @@ from typing import List, Optional, Union
 
 from pydantic import BaseModel, Field
 
-from bots.permissions import CommandPermissions
+from bots.command.permissions import CommandPermissions
 
 # Constants
 USER_EMOJI = "❯"
 DEFAULT_BOT_EMOJI = "🤖"
-
-
 
 
 class BotConfig(BaseModel):
