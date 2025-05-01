@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["bots"]
+packages = ["bots", "bots.command"]
 include-package-data = true
 
 [dependency-groups]

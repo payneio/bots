@@ -104,7 +104,7 @@ class TestNormalizeCommand:
         """Test normalizing a simple command."""
         result = normalize_command("ls -la")
         assert len(result) == 1
-        assert result[0].command == "ls"
+        assert result[0].command == "ls -la"
         assert result[0].has_redirection is False
         assert result[0].via_bash is False
         assert result[0].invalid is False
@@ -113,15 +113,15 @@ class TestNormalizeCommand:
         """Test commands with redirection."""
         result = normalize_command("ls -la > output.txt")
         assert len(result) == 1
-        assert result[0].command == "ls"
+        assert result[0].command == "ls -la"
         assert result[0].has_redirection is True
 
     def test_compound_commands(self):
         """Test normalizing compound commands."""
         result = normalize_command("ls -la | grep foo")
         assert len(result) == 2
-        assert result[0].command == "ls"
-        assert result[1].command == "grep"
+        assert result[0].command == "ls -la"
+        assert result[1].command == "grep foo"
 
     def test_bash_command(self):
         """Test bash -c command pattern."""
@@ -134,14 +134,14 @@ class TestNormalizeCommand:
         """Test commands with quoted arguments."""
         result = normalize_command('find . -name "*.py"')
         assert len(result) == 1
-        assert result[0].command == "find"
+        assert result[0].command == 'find . -name "*.py"'
         assert result[0].has_redirection is False
 
     def test_multiple_redirections(self):
         """Test commands with multiple redirections."""
         result = normalize_command("ls -la > out.txt 2> err.txt")
         assert len(result) == 1
-        assert result[0].command == "ls"
+        assert result[0].command == "ls -la"
         assert result[0].has_redirection is True
 
     def test_invalid_command(self):
@@ -161,6 +161,8 @@ class TestMatchesRule:
         "command,rule,expected",
         [
             # Basic command matching
+            ("kubectl get nodes", "kubectl get", True),
+            ("kubectl view nodes", "kubectl get", False),
             ("ls", "ls", True),
             ("ls -la", "ls", True),
             ("grep pattern", "grep", True),
@@ -249,3 +251,26 @@ class TestCommandPermissions:
         assert len(permissions.allow) > 0
         assert len(permissions.deny) > 0
         assert permissions.ask_if_unspecified is True
+        
+    def test_permit_command_with_subprocess_rules(self):
+        """Test that multi-word rules match longer commands."""
+        # Test that a rule like "kubectl get" correctly matches "kubectl get nodes"
+        permissions = CommandPermissions(allow=["kubectl get"], deny=["kubectl delete"])
+        
+        # This should be APPROVE since "kubectl get" should match "kubectl get nodes"
+        assert permissions.permit_command("kubectl get nodes") == Permission.APPROVE
+        
+        # This should be DENY since "kubectl delete" should match "kubectl delete pods"
+        assert permissions.permit_command("kubectl delete pods") == Permission.DENY
+        
+        # This should be ASK since there's no matching rule
+        assert permissions.permit_command("kubectl describe pods") == Permission.ASK
+        
+        # Test with another example
+        permissions = CommandPermissions(allow=["git status"], deny=["git push"])
+        
+        # This should be APPROVE
+        assert permissions.permit_command("git status --short") == Permission.APPROVE
+        
+        # This should be DENY
+        assert permissions.permit_command("git push origin main") == Permission.DENY

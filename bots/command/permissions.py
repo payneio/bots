@@ -187,7 +187,7 @@ def normalize_command(command: str) -> List[Command]:
             else:
                 normalized_components.append(
                     Command(
-                        command=parsed[0],
+                        command=raw_cmd,
                         has_redirection=has_redirection,
                     )
                 )
@@ -229,9 +229,13 @@ def matches_rule(command_string: str, rule: str) -> bool:
     if not rule_command:
         return False
 
-    # Check if the command starts with the rule command
-    if not command_string.split()[0] == rule_command:
-        return False
+    # Check if the rule parts are all represented in the command string
+    command_parts = command_string.split()
+    rule_parts = rule_command.split()
+    for part in rule_parts:
+        if not command_parts or part != command_parts[0]:
+            return False
+        command_parts.pop(0)
 
     # If no filter specified and command matches, return True
     if not rule_filter:
@@ -289,27 +293,26 @@ class CommandPermissions(BaseModel):
         results = []
 
         for component in components:
+
+            base_cmd = component.command.split()[0] if component.command else ""
+
             if component.invalid:
                 return Permission.DENY
-
-            base_cmd = component.command
-
             # Deny
-            for rule in self.deny:
-                if matches_rule(base_cmd, rule):
+            command_deny_rules = [rule for rule in self.deny if rule.split()[0] == base_cmd]
+            for rule in command_deny_rules:
+                if matches_rule(component.command, rule):
                     return Permission.DENY
 
             # Allow
-            command_allow_rules = [rule for rule in self.allow if rule.startswith(base_cmd)]
+            command_allow_rules = [rule for rule in self.allow if rule.split()[0] == base_cmd]
             allowed = False
             for rule in command_allow_rules:
-                if matches_rule(base_cmd, rule):
+                if matches_rule(component.command, rule):
                     allowed = True
                     break
-            if allowed:
-                results.append(Permission.APPROVE)
-            else:
-                results.append(Permission.ASK)
+
+            results.append(Permission.APPROVE if allowed else Permission.ASK)
 
         if Permission.ASK in results:
             return Permission.ASK
