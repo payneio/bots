@@ -168,7 +168,7 @@ def rename_bot(old_name: str, new_name: str) -> Path:
         raise FileNotFoundError(f"Bot '{old_name}' not found")
 
     # Determine if this is a local or global bot
-    is_local = ".bot" in str(old_path)
+    is_local = ".bots" in str(old_path)
     global_path, local_path = get_bot_paths()
 
     base_path = local_path if is_local else global_path

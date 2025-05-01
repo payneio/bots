@@ -503,7 +503,7 @@ class Session:
 
                     # Display response with emoji
                     emoji = self.config.emoji or DEFAULT_BOT_EMOJI
-                    self.console.print(f"\n[magenta]{emoji} {response.message}[/magenta]")
+                    self.console.print(f"\n[cyan]{emoji} {response.message}[/cyan]")
 
                     # Add assistant message to conversation
                     self.add_message("assistant", response.message)
