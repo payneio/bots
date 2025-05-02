@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from bots.config import DEFAULT_BOT_EMOJI, BotConfig, create_default_system_prompt
+from bots.session import Session
 
 
 def get_bot_paths() -> Tuple[Path, Path]:
@@ -223,7 +224,6 @@ async def start_session(
         debug: Whether to print debug information
         continue_session: Whether to continue from previous session
     """
-    from bots.session import Session
 
     bot_path = find_bot(bot_name)
     if not bot_path:
@@ -252,20 +252,18 @@ async def start_session(
     # Get latest session before continuing (exclude current session path)
     latest_session = None
     if continue_session:
-        from bots.core import find_latest_session
-
+        # Get latest session without circular import
         latest_session = find_latest_session(bot_name, exclude_session=session_path)
 
     # Initialize session
     session = Session(
         config,
         session_path,
-        debug=debug,
-        continue_session=continue_session,
-        latest_session=latest_session,
+        debug,
+        continue_session,
+        latest_session,
     )
 
-    # Run session based on mode
     if one_shot:
         if prompt:
             await session.handle_one_shot(prompt)

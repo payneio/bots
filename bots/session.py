@@ -3,13 +3,10 @@
 import asyncio
 import datetime
 import json
-import os
-import platform
-import socket
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from liquid import Template
 from pydantic_ai.messages import (
     ModelMessage,
     ModelMessagesTypeAdapter,
@@ -22,7 +19,7 @@ from pydantic_ai.messages import (
 from rich.console import Console
 
 from bots.bot import Bot
-from bots.config import DEFAULT_BOT_EMOJI, USER_EMOJI, BotConfig, load_system_prompt
+from bots.config import DEFAULT_BOT_EMOJI, USER_EMOJI, BotConfig
 from bots.models import (
     SessionEvent,
     SessionInfo,
@@ -87,46 +84,6 @@ class Session:
             self._save_session_info()
             self._save_messages()
             self._save_session_log()
-
-    def _refresh_system_prompt(self) -> None:
-        """Reload and render the system prompt into the conversation messages."""
-        raw = load_system_prompt(self.config)
-        template = Template(raw)
-        now = datetime.datetime.now()
-        formatted_date = now.strftime("%Y-%m-%d")
-        formatted_time = now.strftime("%H:%M:%S")
-        config_dir = self.session_path.parent.parent
-        cwd = self.config.init_cwd or os.getcwd()
-        template_vars = {
-            "bot": {
-                "name": self.config.name or bot_name_from_path(config_dir),
-                "emoji": self.config.emoji or DEFAULT_BOT_EMOJI,
-                "description": self.config.description or "No description available",
-            },
-            "date": formatted_date,
-            "time": formatted_time,
-            "cwd": cwd,
-            "config_dir": str(config_dir),
-            "disallowed_commands": self.config.command_permissions.deny,
-        }
-        rendered = template.render(**template_vars)
-        context_info = self._get_context_info()
-        enhanced = f"{rendered}\n\n{context_info}"
-
-        # Create a system message with the rendered prompt
-        system_part = SystemPromptPart(content=enhanced)
-        system_message = ModelRequest(parts=[system_part])
-
-        # Replace existing system message or insert it
-        for idx, msg in enumerate(self.messages):
-            if msg.kind == "request" and any(
-                part.part_kind == "system-prompt" for part in msg.parts
-            ):
-                self.messages[idx] = system_message
-                break
-        else:
-            # No system message found, insert at beginning
-            self.messages.insert(0, system_message)
 
     def _load_previous_session(self, latest_session: Optional[Path] = None) -> bool:
         """Load data from previous session.
@@ -266,93 +223,6 @@ class Session:
                 emoji = self.config.emoji or DEFAULT_BOT_EMOJI
                 self.console.print(f"\n[magenta]{emoji} {content}[/magenta]")
 
-        self.console.print("\n[bold]---[/bold]")  # Divider between history and new session
-
-    def _get_context_info(self) -> str:
-        """Generate context information about the bot and environment.
-
-        Returns:
-            A formatted string with context information
-        """
-        current_time = datetime.datetime.now()
-        formatted_date = current_time.strftime("%Y-%m-%d")
-        formatted_time = current_time.strftime("%H:%M:%S")
-
-        # Get system information
-        system_info = platform.system()
-        system_version = platform.version()
-
-        # Get environment information
-        hostname = socket.gethostname()
-        try:
-            username = os.getlogin()
-        except Exception:
-            username = os.environ.get("USER", "unknown")
-
-        # Use bot's initialized CWD if available, otherwise use current CWD
-        cwd = self.config.init_cwd if self.config.init_cwd else os.getcwd()
-        home_dir = os.path.expanduser("~")
-        ip_address = "127.0.0.1"  # Default for security
-        try:
-            # Try to get a non-loopback IP - just for information, non-critical
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip_address = s.getsockname()[0]
-            s.close()
-        except Exception:
-            pass
-
-        # Get bot configuration information
-        config_dir = self.session_path.parent.parent
-
-        # The backward compatibility code has been removed since tests were updated
-        # to look for "Environment Information" instead of "Session Context"
-
-        # Create template variables
-        template_vars = {
-            "date": formatted_date,
-            "time": formatted_time,
-            "system": {
-                "name": system_info,
-                "version": system_version,
-                "hostname": hostname,
-                "username": username,
-                "ip_address": ip_address,
-            },
-            "paths": {
-                "cwd": cwd,
-                "home": home_dir,
-                "config_dir": str(config_dir),
-            },
-            "bot": {
-                "name": self.config.name or bot_name_from_path(config_dir),
-                "emoji": self.config.emoji or DEFAULT_BOT_EMOJI,
-                "model_provider": self.config.model_provider,
-                "model_name": self.config.model_name,
-                "description": self.config.description or "No description available",
-            },
-        }
-
-        # Template for environment information
-        template_str = """
-## Environment Information
-- Bot: {{ bot.emoji }} {{ bot.name }} - {{ bot.description }}
-- Date: {{ date }}
-- Time: {{ time }}
-- System: {{ system.name }} {{ system.version }}
-- Hostname: {{ system.hostname }}
-- Username: {{ system.username }}
-- IP Address: {{ system.ip_address }}
-- Current Working Directory: {{ paths.cwd }}
-- Home Directory: {{ paths.home }}
-- Bot Config Directory: {{ paths.config_dir }}
-- Model: {{ bot.model_provider }}/{{ bot.model_name }}
-"""
-
-        # Render template with liquid
-        template = Template(template_str)
-        return template.render(**template_vars)
-
     def _save_session_info(self) -> None:
         """Save session info to disk."""
         info_path = self.session_path / "session.json"
@@ -469,15 +339,21 @@ class Session:
         self.console.print("Type '/help' for available commands.")
 
         # Always display conversation history when continuing a session
-        self._display_conversation_history()
+        if self.messages:
+            self._display_conversation_history()
+        else:
+            response, token_usage = await self.bot.generate_welcome_message()
+            self.session_info.token_usage.prompt_tokens += token_usage.prompt_tokens
+            self.session_info.token_usage.completion_tokens += token_usage.completion_tokens
+            self.session_info.token_usage.total_tokens += token_usage.total_tokens
+            self.add_message("assistant", response.message)
+            self.console.print(f"\n[cyan]{self.config.emoji} {response.message}[/cyan]")
 
         try:
             while True:
                 try:
                     # Get user input - use a simple prompt
                     user_input = input(f"\n{USER_EMOJI} ")
-
-                    self._refresh_system_prompt()
 
                     # Check if it's a slash command
                     if user_input.startswith("/"):
@@ -495,19 +371,13 @@ class Session:
                     # Generate response
                     response, token_usage = await self.bot.generate_response(self.messages)
 
-                    # Update token usage
                     self.session_info.token_usage.prompt_tokens += token_usage.prompt_tokens
                     self.session_info.token_usage.completion_tokens += token_usage.completion_tokens
                     self.session_info.token_usage.total_tokens += token_usage.total_tokens
-
-                    # No need to process commands - they're already executed during LLM's thinking phase by execute_command_internal
-
-                    # Display response with emoji
-                    emoji = self.config.emoji or DEFAULT_BOT_EMOJI
-                    self.console.print(f"\n[cyan]{emoji} {response.message}[/cyan]")
-
-                    # Add assistant message to conversation
                     self.add_message("assistant", response.message)
+
+                    # Display response
+                    self.console.print(f"\n[cyan]{self.config.emoji} {response.message}[/cyan]")
 
                 except KeyboardInterrupt:
                     self.console.print("\nExiting session.")
@@ -544,19 +414,15 @@ class Session:
         self._log_event("session_start", {"mode": "one_shot"})
 
         try:
-            self._refresh_system_prompt()
             self.add_message("user", prompt)
+
             response, token_usage = await self.bot.generate_response(self.messages)
 
-            # Update token usage
             self.session_info.token_usage.prompt_tokens += token_usage.prompt_tokens
             self.session_info.token_usage.completion_tokens += token_usage.completion_tokens
             self.session_info.token_usage.total_tokens += token_usage.total_tokens
 
-            # Print response (to stdout)
             print(response.message)
-
-            # Add assistant message to conversation
             self.add_message("assistant", response.message)
 
             # End session
@@ -566,14 +432,9 @@ class Session:
             self._log_event("session_end")
 
         except Exception as e:
-            # Log error and end session
             self.session_info.end_time = datetime.datetime.now()
             self.session_info.status = SessionStatus.ERROR
             self._save_session_info()
             self._log_event("session_error", {"error": str(e)})
-
-            # Print error (to stderr)
-            import sys
-
             print(f"Error: {e}", file=sys.stderr)
             raise

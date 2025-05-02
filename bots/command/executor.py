@@ -35,11 +35,12 @@ class CommandExecutor:
         self.command_permissions = command_permissions
         self.debug = debug
 
-    async def execute_command(self, command: str) -> Dict[str, Any]:
+    async def execute_command(self, command: str, auto_approve: bool = False) -> Dict[str, Any]:
         """Execute a shell command with permission checks.
 
         Args:
             command: The command to execute
+            auto_approve: Whether to automatically approve commands that would normally require asking (default: False)
 
         Returns:
             A dictionary with the command execution results
@@ -86,24 +87,31 @@ class CommandExecutor:
             if self.debug:
                 print(f"Command '{command}' requires user approval", file=sys.stderr)
 
-            console.print(f"\n[yellow]Bot wants to run command:[/yellow] {command}")
-
-            # Ask for approval with a confirmation prompt
-            if Confirm.ask("Allow this command?"):
-                # User approved - continue to execution
-                console.print("[green]Command approved - executing...[/green]")
+            # Auto-approve if specified
+            if auto_approve:
+                if self.debug:
+                    print(f"Auto-approving command: {command}", file=sys.stderr)
+                console.print(f"[blue]Auto-approving command:[/blue] {command}")
                 # We'll proceed to execute this command after this block
             else:
-                # User denied - return error
-                console.print("\n[red]Command was not approved[/red]")
-                return {
-                    "success": False,
-                    "output": "",
-                    "error": f"Command '{command}' was not approved by the user.",
-                    "exit_code": 1,
-                    "status": "denied_by_user",
-                    "command": command,
-                }
+                console.print(f"\n[yellow]Bot wants to run command:[/yellow] {command}")
+
+                # Ask for approval with a confirmation prompt
+                if Confirm.ask("Allow this command?"):
+                    # User approved - continue to execution
+                    console.print("[green]Command approved - executing...[/green]")
+                    # We'll proceed to execute this command after this block
+                else:
+                    # User denied - return error
+                    console.print("\n[red]Command was not approved[/red]")
+                    return {
+                        "success": False,
+                        "output": "",
+                        "error": f"Command '{command}' was not approved by the user.",
+                        "exit_code": 1,
+                        "status": "denied_by_user",
+                        "command": command,
+                    }
         else:
             # Default case (should not happen, but just in case)
             if self.debug:
