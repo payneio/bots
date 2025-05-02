@@ -107,6 +107,7 @@ class Session:
             "time": formatted_time,
             "cwd": cwd,
             "config_dir": str(config_dir),
+            "disallowed_commands": self.config.command_permissions.deny,
         }
         rendered = template.render(**template_vars)
         context_info = self._get_context_info()
