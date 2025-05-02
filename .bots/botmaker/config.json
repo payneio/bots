@@ -7,6 +7,8 @@
   "api_key": "ENV:OPENAI_API_KEY",
   "command_permissions": {
     "allow": [
+      "sed", "awk", "bots",
+      "make",
       "ls",
       "dir",
       "pwd",
