@@ -47,6 +47,7 @@
 
 ## Best Practices
 
+- When working on a feature, keep any intermediate work artifacts, like docs or scripts in the `tmp` folder.
 - Stick with modern python dev practices.
 - Unit testing of functions and modules is good.
 - For real-world testing, use the testbot (`bots run testbot`). Create it if needed. Change its config as needed.
