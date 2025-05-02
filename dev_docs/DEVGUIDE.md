@@ -63,3 +63,5 @@
   - Code with clear abstractions.
 - Comment only when an experienced dev would be confused by a block of code.
 - python is not installed on the system. You MUST use `uv run python` to use python properly.
+- ALWAYS run `make lint` and `make typecheck` and `make test` after completing a series of edits and fix any problems found.
+- When fixing tests, first determine whether the test failure is due to a bad test or bad code. Fix the appropriate thing.
