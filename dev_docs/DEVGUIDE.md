@@ -8,6 +8,7 @@
 - Data for created bots are stored in one of two locations:
   - Global bots: `~/.config/bots/<n>/`
   - Local bots: `./.bots/<bot-name>/` (local to a directory or project)
+- A central registry file at `~/.config/bots/known-bots.txt` tracks local bots for discovery from any directory
 - Important data directory layout:
   ├── config.json # Bot config (model, tags, command rules)
   ├── system_prompt.md # Editable natural language prompt

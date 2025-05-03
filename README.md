@@ -7,6 +7,7 @@
 - Uses pydantic-ai for LLM integration with compatibility layer for Python 3.9+
 - Supports both interactive and one-shot modes
 - Project-specific or global bot configurations
+- Central registry for local bots to be discoverable from any directory
 - Command validation and permissions system
 - Session logging and history
 - Slash commands for common operations
@@ -67,6 +68,9 @@ bots run --name mybot  # or: bots run -n mybot
 
 # List all available bots
 bots list
+
+# Register a local bot for discovery from any directory
+bots register mybot
 
 # Rename a bot
 bots mv old-name new-name
@@ -129,6 +133,24 @@ Bots can be configured by editing their `config.json` file. Example configuratio
   }
 }
 ```
+
+## Bot Discovery
+
+There are three types of bots:
+
+1. **Global Bots**: Stored in `~/.config/bots/<name>/` and available from any directory
+2. **Local Bots**: Stored in `./.bots/<name>/` in a specific directory/project
+3. **Registered Bots**: Local bots that have been registered in a central file for discovery from any directory
+
+When you create a local bot using the `--local` flag, it is automatically registered in `~/.config/bots/known-bots.txt` for discovery from any directory. You can also manually register an existing local bot using the `bots register <bot-name>` command. This allows you to maintain project-specific bots while still being able to access them from anywhere.
+
+To see all available bots, run:
+
+```bash
+bots list
+```
+
+This will show global bots, local bots in the current directory, and any registered bots from other directories.
 
 ## Environment Variables
 

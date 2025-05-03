@@ -17,6 +17,78 @@ def get_bot_paths() -> Tuple[Path, Path]:
     return global_path, local_path
 
 
+def get_known_bots_file() -> Path:
+    """Get path to the known-bots.txt file.
+    
+    This file contains paths to local bots that have been registered for
+    discovery from other directories.
+    
+    Returns:
+        Path to the known-bots.txt file
+    """
+    global_path, _ = get_bot_paths()
+    return global_path / "known-bots.txt"
+
+
+def register_bot(bot_path: Path) -> None:
+    """Register a bot in the known-bots.txt file for discovery.
+    
+    Args:
+        bot_path: Absolute path to the bot directory
+    """
+    known_bots_file = get_known_bots_file()
+    
+    # Create global directory if it doesn't exist
+    known_bots_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Read existing entries or create empty list
+    known_bots = []
+    if known_bots_file.exists():
+        with open(known_bots_file, "r") as f:
+            known_bots = [line.strip() for line in f if line.strip()]
+    
+    # Convert to absolute path string
+    bot_path_str = str(bot_path.absolute())
+    
+    # Add bot path if not already in the list
+    if bot_path_str not in known_bots:
+        known_bots.append(bot_path_str)
+        
+        # Write back to file
+        with open(known_bots_file, "w") as f:
+            for path in known_bots:
+                f.write(f"{path}\n")
+
+
+def register_local_bot(bot_name: str) -> Path:
+    """Register a local bot in the known-bots.txt file for discovery from any directory.
+    
+    This function looks for a bot with the given name in the local directory (.bots)
+    and registers it in the global known-bots.txt file so it can be discovered 
+    from any directory.
+    
+    Args:
+        bot_name: Name of the local bot to register
+        
+    Returns:
+        Path to the registered bot
+        
+    Raises:
+        FileNotFoundError: If the bot is not found in the local directory
+    """
+    _, local_path = get_bot_paths()
+    
+    # Check if the bot exists in the local directory
+    bot_path = local_path / bot_name
+    if not bot_path.exists():
+        raise FileNotFoundError(f"Local bot '{bot_name}' not found in {local_path}")
+    
+    # Register the bot
+    register_bot(bot_path)
+    
+    return bot_path
+
+
 def find_latest_session(bot_name: str, exclude_session: Optional[Path] = None) -> Optional[Path]:
     """Find the most recent session for a bot.
 
@@ -60,7 +132,7 @@ def find_latest_session(bot_name: str, exclude_session: Optional[Path] = None) -
 
 
 def find_bot(bot_name: str) -> Optional[Path]:
-    """Find a bot by name, checking local then global paths."""
+    """Find a bot by name, checking local, global, and registered paths."""
     global_path, local_path = get_bot_paths()
 
     # Check local first, then global
@@ -71,6 +143,22 @@ def find_bot(bot_name: str) -> Optional[Path]:
     global_bot_path = global_path / bot_name
     if global_bot_path.exists():
         return global_bot_path
+    
+    # If not found in local or global, check registered bots
+    known_bots_file = get_known_bots_file()
+    if known_bots_file.exists():
+        with open(known_bots_file, "r") as f:
+            registered_paths = [line.strip() for line in f if line.strip()]
+            
+            # Check each registered path to see if it matches the bot name
+            for path_str in registered_paths:
+                try:
+                    path = Path(path_str)
+                    if path.exists() and path.is_dir() and path.name == bot_name:
+                        return path
+                except Exception:
+                    # Skip invalid paths
+                    continue
 
     return None
 
@@ -115,6 +203,10 @@ def create_bot(bot_name: str, local: bool = False, description: Optional[str] = 
     # Create default system prompt
     create_default_system_prompt(bot_path)
 
+    # Register local bots for discovery from any directory
+    if local:
+        register_bot(bot_path)
+
     return bot_path
 
 
@@ -122,18 +214,22 @@ def list_bots() -> Dict[str, List[Dict[str, str]]]:
     """List all available bots, both local and global, with their descriptions.
 
     Returns:
-        Dict with 'global' and 'local' keys, each containing a list of dict with
-        'name' and optional 'description' for each bot
+        Dict with 'global', 'local', and 'registered' keys, each containing a list of dict with
+        'name', 'path', and optional 'description' for each bot
     """
     global_path, local_path = get_bot_paths()
 
-    result: Dict[str, List[Dict[str, str]]] = {"global": [], "local": []}
+    result: Dict[str, List[Dict[str, str]]] = {"global": [], "local": [], "registered": []}
+    
+    # Track processed paths to avoid duplicates
+    processed_paths = set()
 
     # List global bots
     if global_path.exists():
         for p in global_path.iterdir():
-            if p.is_dir():
-                bot_info = {"name": p.name}
+            if p.is_dir() and p.name != "known-bots.txt":  # Skip the known-bots file if it's a directory
+                processed_paths.add(str(p.absolute()))
+                bot_info = {"name": p.name, "path": str(p)}
                 try:
                     config = BotConfig.load(p)
                     if config.description:
@@ -148,7 +244,8 @@ def list_bots() -> Dict[str, List[Dict[str, str]]]:
     if local_path.exists():
         for p in local_path.iterdir():
             if p.is_dir():
-                bot_info = {"name": p.name}
+                processed_paths.add(str(p.absolute()))
+                bot_info = {"name": p.name, "path": str(p)}
                 try:
                     config = BotConfig.load(p)
                     if config.description:
@@ -158,6 +255,40 @@ def list_bots() -> Dict[str, List[Dict[str, str]]]:
                 except Exception:
                     pass  # Just continue if we can't load the config
                 result["local"].append(bot_info)
+
+    # List registered bots from known-bots.txt
+    known_bots_file = get_known_bots_file()
+    if known_bots_file.exists():
+        try:
+            with open(known_bots_file, "r") as f:
+                for line in f:
+                    bot_path_str = line.strip()
+                    if not bot_path_str or bot_path_str in processed_paths:
+                        continue
+
+                    bot_path = Path(bot_path_str)
+                    if not bot_path.exists() or not bot_path.is_dir():
+                        continue
+
+                    # Add to processed paths to avoid duplicates
+                    processed_paths.add(bot_path_str)
+                    
+                    # Get the bot name from the directory name
+                    bot_name = bot_path.name
+                    
+                    bot_info = {"name": bot_name, "path": bot_path_str}
+                    try:
+                        config = BotConfig.load(bot_path)
+                        if config.description:
+                            bot_info["description"] = config.description
+                        if config.emoji:
+                            bot_info["emoji"] = config.emoji
+                    except Exception:
+                        pass  # Just continue if we can't load the config
+                    
+                    result["registered"].append(bot_info)
+        except Exception:
+            pass  # Continue if there's an issue reading the known-bots file
 
     return result
 

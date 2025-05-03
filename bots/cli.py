@@ -8,7 +8,7 @@ import pydantic_ai
 from rich.console import Console
 
 from bots.config import DEFAULT_BOT_EMOJI
-from bots.core import create_bot, delete_bot, list_bots, rename_bot, run_session
+from bots.core import create_bot, delete_bot, list_bots, register_local_bot, rename_bot, run_session
 
 console = Console()
 
@@ -94,13 +94,13 @@ def init(bot_name: str, local: bool, description: Optional[str] = None) -> None:
 def list() -> None:
     """List all available bots.
 
-    Shows all local bots (in the current directory's .bots folder)
-    and global bots (in ~/.config/bots/), including their descriptions
-    if available.
+    Shows all local bots (in the current directory's .bots folder),
+    global bots (in ~/.config/bots/), and registered bots from other
+    directories, including their descriptions if available.
     """
     try:
         bots = list_bots()
-        if not bots["global"] and not bots["local"]:
+        if not bots["global"] and not bots["local"] and not bots["registered"]:
             console.print("No bots found. Create one with 'bots init <n>'")
             return
 
@@ -137,6 +137,25 @@ def list() -> None:
                         )
                     else:
                         console.print(f"  - {emoji} {bot['name']}")
+        
+        if bots["registered"]:
+            console.print("\n[green]Registered Bots:[/green]")
+            for bot in bots["registered"]:
+                if isinstance(bot, str):
+                    console.print(f"  - {bot}")
+                else:
+                    # Use emoji from bot info if available, otherwise default
+                    emoji = bot.get("emoji", DEFAULT_BOT_EMOJI)
+                    
+                    if "description" in bot:
+                        console.print(
+                            f"  - {emoji} {bot['name']} - [italic]{bot['description']}[/italic]"
+                            f" [dim]({bot['path']})[/dim]"
+                        )
+                    else:
+                        console.print(
+                            f"  - {emoji} {bot['name']} [dim]({bot['path']})[/dim]"
+                        )
 
     except Exception as e:
         console.print(f"[red]Error listing bots: {e}[/red]")
@@ -157,6 +176,25 @@ def mv(old_name: str, new_name: str) -> None:
         console.print(f"[green]Renamed bot from {old_name} to {new_name} at {path}[/green]")
     except Exception as e:
         console.print(f"[red]Error renaming bot: {e}[/red]")
+        sys.exit(1)
+
+
+@main.command()
+@click.argument("bot_name")
+def register(bot_name: str) -> None:
+    """Register a local bot for discovery from any directory.
+    
+    Adds a local bot to the central registry so it can be discovered
+    and used from any directory on the system.
+    """
+    try:
+        path = register_local_bot(bot_name)
+        console.print(f"[green]Registered local bot '{bot_name}' at {path}[/green]")
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error registering bot: {e}[/red]")
         sys.exit(1)
 
 
