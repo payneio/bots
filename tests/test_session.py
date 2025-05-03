@@ -163,73 +163,68 @@ async def test_session_init(temp_session_dir, bot_config):
 @pytest.mark.asyncio
 async def test_continue_session(temp_session_dir, bot_config, pydantic_messages):
     """Test continuing from a previous session."""
-    # Mock the find_latest_session function
-    with patch("bots.core.find_latest_session") as mock_find_latest:
-        # Create a previous session directory and files
-        prev_session_dir = temp_session_dir.parent / "prev_session"
-        prev_session_dir.mkdir(parents=True, exist_ok=True)
+    # Create a previous session directory and files that will be used as the session path
+    # In the new implementation, we directly pass the previous session path to Session
+    prev_session_dir = temp_session_dir
+    
+    # Create session files in the session directory
+    session_info = {
+        "start_time": "2025-04-01T12:00:00",
+        "model": "gpt-4",
+        "provider": "openai",
+        "token_usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+        "num_messages": 3,
+        "commands_run": 1,
+        "status": "completed",
+    }
 
-        # Create session files in previous session directory
-        session_info = {
-            "start_time": "2025-04-01T12:00:00",
-            "model": "gpt-4",
-            "provider": "openai",
-            "token_usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
-            "num_messages": 3,
-            "commands_run": 1,
-            "status": "completed",
-        }
+    # Serialize the pydantic messages
+    messages_json = ModelMessagesTypeAdapter.dump_json(pydantic_messages)
 
-        # Serialize the pydantic messages
-        messages_json = ModelMessagesTypeAdapter.dump_json(pydantic_messages)
+    session_log = {"events": []}
 
-        session_log = {"events": []}
+    with open(prev_session_dir / "session.json", "w") as f:
+        json.dump(session_info, f)
+    with open(prev_session_dir / "messages.json", "wb") as f:
+        f.write(messages_json)
+    with open(prev_session_dir / "log.json", "w") as f:
+        json.dump(session_log, f)
 
-        with open(prev_session_dir / "session.json", "w") as f:
-            json.dump(session_info, f)
-        with open(prev_session_dir / "messages.json", "wb") as f:
-            f.write(messages_json)
-        with open(prev_session_dir / "log.json", "w") as f:
-            json.dump(session_log, f)
+    # Create a new session with continue_session flag
+    with patch("bots.bot.Bot", MockBot):
+        session = Session(bot_config, prev_session_dir, continue_session=True)
 
-        # Mock the find_latest_session to return our previous session
-        mock_find_latest.return_value = prev_session_dir
+        # Check that previous messages were loaded
+        assert len(session.messages) == 3
 
-        # Create a new session with continue_session flag
-        with patch("bots.bot.Bot", MockBot):
-            session = Session(bot_config, temp_session_dir, continue_session=True)
+        # Check first message (system)
+        system_msg = session.messages[0]
+        assert system_msg.kind == "request"
+        system_part = [part for part in system_msg.parts if part.part_kind == "system-prompt"][
+            0
+        ]
+        assert "You are a test assistant" in system_part.content
 
-            # Check that previous messages were loaded
-            assert len(session.messages) == 3
+        # Check second message (user)
+        user_msg = session.messages[1]
+        assert user_msg.kind == "request"
+        user_part = [part for part in user_msg.parts if part.part_kind == "user-prompt"][0]
+        assert user_part.content == "Hello"
 
-            # Check first message (system)
-            system_msg = session.messages[0]
-            assert system_msg.kind == "request"
-            system_part = [part for part in system_msg.parts if part.part_kind == "system-prompt"][
-                0
-            ]
-            assert "You are a test assistant" in system_part.content
+        # Check third message (assistant)
+        assistant_msg = session.messages[2]
+        assert assistant_msg.kind == "response"
+        text_part = [part for part in assistant_msg.parts if part.part_kind == "text"][0]
+        assert text_part.content == "Hi there!"
 
-            # Check second message (user)
-            user_msg = session.messages[1]
-            assert user_msg.kind == "request"
-            user_part = [part for part in user_msg.parts if part.part_kind == "user-prompt"][0]
-            assert user_part.content == "Hello"
+        # Check that token usage was loaded
+        assert session.session_info.token_usage.prompt_tokens == 100
+        assert session.session_info.token_usage.completion_tokens == 50
+        assert session.session_info.token_usage.total_tokens == 150
 
-            # Check third message (assistant)
-            assistant_msg = session.messages[2]
-            assert assistant_msg.kind == "response"
-            text_part = [part for part in assistant_msg.parts if part.part_kind == "text"][0]
-            assert text_part.content == "Hi there!"
-
-            # Check that token usage was loaded
-            assert session.session_info.token_usage.prompt_tokens == 100
-            assert session.session_info.token_usage.completion_tokens == 50
-            assert session.session_info.token_usage.total_tokens == 150
-
-            # Check that status was reset to active
-            assert session.session_info.status == SessionStatus.ACTIVE
-            assert session.session_info.end_time is None
+        # Check that status was reset to active
+        assert session.session_info.status == SessionStatus.ACTIVE
+        assert session.session_info.end_time is None
 
 
 @pytest.mark.asyncio

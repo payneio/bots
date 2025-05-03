@@ -3,6 +3,7 @@
 import asyncio
 import datetime
 import os
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -19,10 +20,10 @@ def get_bot_paths() -> Tuple[Path, Path]:
 
 def get_known_bots_file() -> Path:
     """Get path to the known-bots.txt file.
-    
+
     This file contains paths to local bots that have been registered for
     discovery from other directories.
-    
+
     Returns:
         Path to the known-bots.txt file
     """
@@ -32,28 +33,28 @@ def get_known_bots_file() -> Path:
 
 def register_bot(bot_path: Path) -> None:
     """Register a bot in the known-bots.txt file for discovery.
-    
+
     Args:
         bot_path: Absolute path to the bot directory
     """
     known_bots_file = get_known_bots_file()
-    
+
     # Create global directory if it doesn't exist
     known_bots_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Read existing entries or create empty list
     known_bots = []
     if known_bots_file.exists():
         with open(known_bots_file, "r") as f:
             known_bots = [line.strip() for line in f if line.strip()]
-    
+
     # Convert to absolute path string
     bot_path_str = str(bot_path.absolute())
-    
+
     # Add bot path if not already in the list
     if bot_path_str not in known_bots:
         known_bots.append(bot_path_str)
-        
+
         # Write back to file
         with open(known_bots_file, "w") as f:
             for path in known_bots:
@@ -62,34 +63,34 @@ def register_bot(bot_path: Path) -> None:
 
 def register_local_bot(bot_name: str) -> Path:
     """Register a local bot in the known-bots.txt file for discovery from any directory.
-    
+
     This function looks for a bot with the given name in the local directory (.bots)
-    and registers it in the global known-bots.txt file so it can be discovered 
+    and registers it in the global known-bots.txt file so it can be discovered
     from any directory.
-    
+
     Args:
         bot_name: Name of the local bot to register
-        
+
     Returns:
         Path to the registered bot
-        
+
     Raises:
         FileNotFoundError: If the bot is not found in the local directory
     """
     _, local_path = get_bot_paths()
-    
+
     # Check if the bot exists in the local directory
     bot_path = local_path / bot_name
     if not bot_path.exists():
         raise FileNotFoundError(f"Local bot '{bot_name}' not found in {local_path}")
-    
+
     # Register the bot
     register_bot(bot_path)
-    
+
     return bot_path
 
 
-def find_latest_session(bot_name: str, exclude_session: Optional[Path] = None) -> Optional[Path]:
+def find_latest_session(bot_name: str) -> Optional[Path]:
     """Find the most recent session for a bot.
 
     Args:
@@ -109,8 +110,6 @@ def find_latest_session(bot_name: str, exclude_session: Optional[Path] = None) -
 
     # List all session directories and sort by name (timestamp)
     all_dirs = [d for d in sessions_path.iterdir() if d.is_dir()]
-    if exclude_session:
-        all_dirs = [d for d in all_dirs if d != exclude_session]
 
     if not all_dirs:
         return None
@@ -143,13 +142,13 @@ def find_bot(bot_name: str) -> Optional[Path]:
     global_bot_path = global_path / bot_name
     if global_bot_path.exists():
         return global_bot_path
-    
+
     # If not found in local or global, check registered bots
     known_bots_file = get_known_bots_file()
     if known_bots_file.exists():
         with open(known_bots_file, "r") as f:
             registered_paths = [line.strip() for line in f if line.strip()]
-            
+
             # Check each registered path to see if it matches the bot name
             for path_str in registered_paths:
                 try:
@@ -220,14 +219,16 @@ def list_bots() -> Dict[str, List[Dict[str, str]]]:
     global_path, local_path = get_bot_paths()
 
     result: Dict[str, List[Dict[str, str]]] = {"global": [], "local": [], "registered": []}
-    
+
     # Track processed paths to avoid duplicates
     processed_paths = set()
 
     # List global bots
     if global_path.exists():
         for p in global_path.iterdir():
-            if p.is_dir() and p.name != "known-bots.txt":  # Skip the known-bots file if it's a directory
+            if (
+                p.is_dir() and p.name != "known-bots.txt"
+            ):  # Skip the known-bots file if it's a directory
                 processed_paths.add(str(p.absolute()))
                 bot_info = {"name": p.name, "path": str(p)}
                 try:
@@ -272,10 +273,10 @@ def list_bots() -> Dict[str, List[Dict[str, str]]]:
 
                     # Add to processed paths to avoid duplicates
                     processed_paths.add(bot_path_str)
-                    
+
                     # Get the bot name from the directory name
                     bot_name = bot_path.name
-                    
+
                     bot_info = {"name": bot_name, "path": bot_path_str}
                     try:
                         config = BotConfig.load(bot_path)
@@ -285,7 +286,7 @@ def list_bots() -> Dict[str, List[Dict[str, str]]]:
                             bot_info["emoji"] = config.emoji
                     except Exception:
                         pass  # Just continue if we can't load the config
-                    
+
                     result["registered"].append(bot_info)
         except Exception:
             pass  # Continue if there's an issue reading the known-bots file
@@ -339,6 +340,38 @@ def delete_bot(bot_name: str) -> Path:
     return bot_path
 
 
+def source_script(script_path: Path, debug: bool = False) -> None:
+    """Source startup.sh if it exists in the bot's config directory"""
+
+    if script_path.exists():
+        try:
+            # Source the script and capture its output
+            if debug:
+                print(f"Sourcing startup script: {script_path}")
+            # The command sources the script in a new shell and exports all variables to the current environment
+            result = subprocess.run(
+                f"source {str(script_path)} && env",
+                shell=True,
+                text=True,
+                capture_output=True,
+                executable="/bin/bash",
+            )
+            if result.returncode == 0:
+                # Parse the environment variables and set them in the current process
+                for line in result.stdout.splitlines():
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        os.environ[key] = value
+                if debug:
+                    print("Startup script sourced successfully")
+            else:
+                if debug:
+                    print(f"Error running startup script: {result.stderr}")
+        except Exception as e:
+            if debug:
+                print(f"Error sourcing startup script: {e}")
+
+
 async def start_session(
     bot_name: str,
     one_shot: bool = False,
@@ -356,43 +389,34 @@ async def start_session(
         continue_session: Whether to continue from previous session
     """
 
+    # Load config
     bot_path = find_bot(bot_name)
     if not bot_path:
         raise FileNotFoundError(f"Bot '{bot_name}' not found")
-
-    # Load config
     try:
         config = BotConfig.load(bot_path)
     except Exception as e:
         raise RuntimeError(f"Failed to load bot configuration: {e}")
-
-    # Set system prompt path
     config.system_prompt_path = str(bot_path / "system_prompt.md")
-
-    # Set current working directory if not already set
     if not config.init_cwd:
         config.init_cwd = os.getcwd()
-        # Save this value for future sessions
-        config.save(bot_path)
 
-    # Create session directory (we need this path to exclude it from find_latest_session)
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    session_path = bot_path / "sessions" / timestamp
-    session_path.mkdir(parents=True, exist_ok=True)
-
-    # Get latest session before continuing (exclude current session path)
-    latest_session = None
-    if continue_session:
-        # Get latest session without circular import
-        latest_session = find_latest_session(bot_name, exclude_session=session_path)
+    source_script(bot_path / "startup.sh", debug)
 
     # Initialize session
+
+    if continue_session:
+        session_path = find_latest_session(bot_name)
+    else:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        session_path = bot_path / "sessions" / timestamp
+        session_path.mkdir(parents=True, exist_ok=True)
+
     session = Session(
         config,
         session_path,
         debug,
         continue_session,
-        latest_session,
     )
 
     if one_shot:

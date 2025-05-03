@@ -49,7 +49,6 @@ class Session:
         session_path: Path,
         debug: bool = False,
         continue_session: bool = False,
-        latest_session: Optional[Path] = None,
     ):
         """Initialize a session.
 
@@ -66,9 +65,7 @@ class Session:
         self.bot = Bot(config, debug=debug)
         self.console = Console()
 
-        # Session directory should already exist (created in async_core.py)
-
-        if continue_session and self._load_previous_session(latest_session):
+        if continue_session and self._load_previous_session(session_path):
             self.console.print("[blue]Continuing from previous session[/blue]")
         else:
             # Initialize new session data
